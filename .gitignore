@@ -24,6 +24,11 @@ profile.cov
 go.work
 go.work.sum
 
+# Local build outputs and Go caches created by build.sh
+/build/
+/dist/
+/.cache/
+
 # env file
 .env
 
