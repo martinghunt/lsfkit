@@ -1,6 +1,7 @@
 package lsf
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -40,5 +41,63 @@ func TestJobValidation(t *testing.T) {
 		if _, e := j.String(); e == nil {
 			t.Errorf("expected error for %#v", j)
 		}
+	}
+}
+
+func TestInteractiveJobString(t *testing.T) {
+	job := Job{
+		Name:        "interactive-shell",
+		Command:     "bash",
+		MemoryGB:    1,
+		MemoryUnits: "MB",
+		Interactive: true,
+	}
+	got, err := job.String()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "bsub -Is") {
+		t.Fatalf("interactive job did not include bsub -Is: %s", got)
+	}
+	if strings.Contains(got, "-o '") || strings.Contains(got, "-e '") {
+		t.Fatalf("interactive job unexpectedly redirected terminal output: %s", got)
+	}
+}
+
+func TestInteractiveJobHonoursExplicitOutputFiles(t *testing.T) {
+	job := Job{
+		Name:        "interactive-shell",
+		Out:         "interactive.out",
+		Err:         "interactive.err",
+		Command:     "bash",
+		MemoryGB:    1,
+		MemoryUnits: "MB",
+		Interactive: true,
+	}
+	got, err := job.String()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "-o 'interactive.out' -e 'interactive.err'") {
+		t.Fatalf("interactive job ignored explicit output files: %s", got)
+	}
+}
+
+func TestInteractiveArgsPreserveCommandWords(t *testing.T) {
+	job := Job{
+		Name:        "shell",
+		Command:     "bash -lc echo hello",
+		CommandArgs: []string{"bash", "-lc", "echo hello"},
+		MemoryGB:    1,
+		MemoryUnits: "MB",
+		Interactive: true,
+	}
+	args, err := job.InteractiveArgs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"bash", "-lc", "echo hello"}
+	if got := args[len(args)-len(want):]; !slices.Equal(got, want) {
+		t.Fatalf("command words changed: got %q, want %q", got, want)
 	}
 }

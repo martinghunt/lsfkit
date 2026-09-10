@@ -10,7 +10,7 @@ import (
 
 var runOptions struct {
 	out, err, checkpointDir, memoryUnits, tokensName, queue string
-	checkpoint, norun                                       bool
+	checkpoint, interactive, norun                          bool
 	checkpointPeriod                                        int
 	arrayLimit, start, end, threads, tokensNumber           int
 	memory, tmpSpace                                        float64
@@ -31,6 +31,7 @@ var runCmd = &cobra.Command{
 			Err:              runOptions.err,
 			Name:             args[1],
 			Command:          joinCommand(args[2:]),
+			CommandArgs:      args[2:],
 			MemoryGB:         memory,
 			TmpSpaceGB:       runOptions.tmpSpace,
 			Threads:          runOptions.threads,
@@ -38,6 +39,7 @@ var runCmd = &cobra.Command{
 			ArrayEnd:         runOptions.end,
 			ArrayLimit:       runOptions.arrayLimit,
 			Checkpoint:       runOptions.checkpoint,
+			Interactive:      runOptions.interactive,
 			CheckpointDir:    runOptions.checkpointDir,
 			CheckpointPeriod: runOptions.checkpointPeriod,
 			MemoryUnits:      runOptions.memoryUnits,
@@ -56,6 +58,9 @@ var runCmd = &cobra.Command{
 
 		if runOptions.norun {
 			return nil
+		}
+		if runOptions.interactive {
+			return job.ExecInteractive()
 		}
 		id, err := job.Submit()
 		if err != nil {
@@ -82,6 +87,7 @@ func init() {
 	f.StringVarP(&runOptions.err, "err", "e", "", "stderr file (default: name.e)")
 	f.StringVarP(&runOptions.out, "out", "o", "", "stdout file (default: name.o)")
 	f.BoolVarP(&runOptions.checkpoint, "checkpoint", "c", false, "use checkpointing")
+	f.BoolVarP(&runOptions.interactive, "interactive", "i", false, "run interactively using bsub -Is")
 	f.StringVarP(&runOptions.checkpointDir, "checkpoint-dir", "d", "", "checkpoint directory")
 	f.IntVarP(&runOptions.checkpointPeriod, "checkpoint-period", "p", 600, "checkpoint period in minutes")
 	f.IntVar(&runOptions.arrayLimit, "array-limit", 100, "maximum concurrently running array jobs")

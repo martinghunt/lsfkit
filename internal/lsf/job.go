@@ -14,14 +14,123 @@ import (
 // Job is an LSF job submission.
 type Job struct {
 	Out, Err, Name, Queue, Command                                            string
+	CommandArgs                                                               []string
 	MemoryGB, TmpSpaceGB                                                      float64
 	Threads, ArrayStart, ArrayEnd, ArrayLimit, CheckpointPeriod, TokensNumber int
-	Checkpoint                                                                bool
+	Checkpoint, Interactive                                                   bool
 	CheckpointDir, MemoryUnits, TokensName                                    string
 	Done, Ended                                                               []string
 }
 
+// InteractiveArgs returns the bsub argument vector for an interactive job.
+// CommandArgs must contain the original, already shell-parsed command words.
+func (j Job) InteractiveArgs() ([]string, error) {
+	if !j.Interactive {
+		return nil, fmt.Errorf("interactive execution requires an interactive job")
+	}
+	if len(j.CommandArgs) == 0 {
+		return nil, fmt.Errorf("interactive execution requires command arguments")
+	}
+	if j.ArrayStart != 0 || j.ArrayEnd != 0 {
+		return nil, fmt.Errorf("--interactive cannot be used with a job array")
+	}
+	if j.Checkpoint {
+		return nil, fmt.Errorf("--interactive cannot be used with checkpointing")
+	}
+
+	outputSpecified := j.Out != "" || j.Err != ""
+	if j.Out == "" {
+		j.Out = j.Name + ".o"
+	}
+	if j.Err == "" {
+		j.Err = j.Name + ".e"
+	}
+	if outputSpecified {
+		if err := validateLogFiles(j.Out, j.Err); err != nil {
+			return nil, err
+		}
+	}
+
+	resource, maxMemory, err := j.resourceRequest()
+	if err != nil {
+		return nil, err
+	}
+	args := []string{"-Is"}
+	if j.Queue != "" {
+		args = append(args, "-q", j.Queue)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		args = append(args, "-E", "test -e "+home)
+	}
+	if j.Threads > 1 {
+		args = append(args, "-n", strconv.Itoa(j.Threads))
+	}
+	args = append(args, "-R", resource, "-M", maxMemory)
+	if outputSpecified {
+		args = append(args, "-o", j.Out, "-e", j.Err)
+	}
+	args = append(args, "-J", j.Name)
+
+	if dependencies := j.dependencyExpression(); dependencies != "" {
+		args = append(args, "-w", dependencies)
+	}
+	return append(args, j.CommandArgs...), nil
+}
+
 func memoryMB(gb float64) int { return int(1000 * (float64(int(gb*1000+0.5)) / 1000)) }
+
+func (j Job) resourceRequest() (string, string, error) {
+	units, err := j.memoryUnits()
+	if err != nil {
+		return "", "", err
+	}
+	mem, tmp := memoryMB(j.MemoryGB), memoryMB(j.TmpSpaceGB)
+	resource := "select[mem>" + strconv.Itoa(mem)
+	if tmp > 0 {
+		resource += " && tmp>" + strconv.Itoa(tmp)
+	}
+	resource += "] rusage[mem=" + strconv.Itoa(mem)
+	if tmp > 0 {
+		resource += ",tmp=" + strconv.Itoa(tmp)
+	}
+	if j.TokensName != "" {
+		resource += "," + j.TokensName + "=" + strconv.Itoa(j.TokensNumber)
+	}
+	resource += "]"
+	if j.Threads > 1 {
+		resource = "span[hosts=1] " + resource
+	}
+	maxMemory := strconv.Itoa(mem)
+	if units == "KB" {
+		maxMemory += "000"
+	}
+	return resource, maxMemory, nil
+}
+
+func validateLogFiles(files ...string) error {
+	for _, file := range files {
+		dir := filepath.Dir(file)
+		if dir == "." {
+			continue
+		}
+		info, err := os.Stat(dir)
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("log directory does not exist: %s", dir)
+		}
+	}
+	return nil
+}
+
+func (j Job) dependencyExpression() string {
+	dependencies := make([]string, 0, len(j.Done)+len(j.Ended))
+	for _, name := range j.Done {
+		dependencies = append(dependencies, "done("+dependency(name)+")")
+	}
+	for _, name := range j.Ended {
+		dependencies = append(dependencies, "ended("+dependency(name)+")")
+	}
+	return strings.Join(dependencies, " && ")
+}
 
 func (j Job) memoryUnits() (string, error) {
 	if j.MemoryUnits != "" {
@@ -65,28 +174,30 @@ func (j Job) String() (string, error) {
 	if j.Command == "" {
 		return "", fmt.Errorf("no command given")
 	}
+	outputSpecified := j.Out != "" || j.Err != ""
 	if j.Out == "" {
 		j.Out = j.Name + ".o"
 	}
 	if (j.ArrayStart == 0) != (j.ArrayEnd == 0) {
 		return "", fmt.Errorf("--start and --end must be supplied together")
 	}
+	if j.Interactive && j.ArrayStart != 0 {
+		return "", fmt.Errorf("--interactive cannot be used with a job array")
+	}
 	if j.Err == "" {
 		j.Err = j.Name + ".e"
 	}
-	for _, f := range []string{j.Out, j.Err} {
-		if dir := filepath.Dir(f); dir != "." {
-			if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-				return "", fmt.Errorf("log directory does not exist: %s", dir)
-			}
-		}
+	if err := validateLogFiles(j.Out, j.Err); err != nil {
+		return "", err
 	}
-	units, err := j.memoryUnits()
+	resource, maxMemory, err := j.resourceRequest()
 	if err != nil {
 		return "", err
 	}
-	mem, tmp := memoryMB(j.MemoryGB), memoryMB(j.TmpSpaceGB)
 	parts := []string{"bsub"}
+	if j.Interactive {
+		parts = append(parts, "-Is")
+	}
 	if j.Checkpoint {
 		dir := j.CheckpointDir
 		if dir == "" {
@@ -104,26 +215,10 @@ func (j Job) String() (string, error) {
 	if home, err := os.UserHomeDir(); err == nil {
 		parts = append(parts, "-E", quote("test -e "+home))
 	}
-	resource := "select[mem>" + strconv.Itoa(mem)
-	if tmp > 0 {
-		resource += " && tmp>" + strconv.Itoa(tmp)
-	}
-	resource += "] rusage[mem=" + strconv.Itoa(mem)
-	if tmp > 0 {
-		resource += ",tmp=" + strconv.Itoa(tmp)
-	}
-	if j.TokensName != "" {
-		resource += "," + j.TokensName + "=" + strconv.Itoa(j.TokensNumber)
-	}
-	resource += "]"
 	if j.Threads > 1 {
-		resource = "span[hosts=1] " + resource
 		parts = append(parts, "-n", strconv.Itoa(j.Threads))
 	}
-	parts = append(parts, "-R", quote(resource), "-M", strconv.Itoa(mem))
-	if units == "KB" {
-		parts[len(parts)-1] += "000"
-	}
+	parts = append(parts, "-R", quote(resource), "-M", maxMemory)
 	if j.ArrayStart > 0 {
 		if j.ArrayEnd < j.ArrayStart {
 			return "", fmt.Errorf("array end must be at least array start")
@@ -131,17 +226,13 @@ func (j Job) String() (string, error) {
 		parts = append(parts, "-o", quote(j.Out+".%I"), "-e", quote(j.Err+".%I"), "-J", quote(fmt.Sprintf("%s[%d-%d]%%%d", j.Name, j.ArrayStart, j.ArrayEnd, j.ArrayLimit)))
 		j.Command = strings.ReplaceAll(j.Command, "INDEX", "\\$LSB_JOBINDEX")
 	} else {
-		parts = append(parts, "-o", quote(j.Out), "-e", quote(j.Err), "-J", quote(j.Name))
+		if !j.Interactive || outputSpecified {
+			parts = append(parts, "-o", quote(j.Out), "-e", quote(j.Err))
+		}
+		parts = append(parts, "-J", quote(j.Name))
 	}
-	deps := []string{}
-	for _, d := range j.Done {
-		deps = append(deps, "done("+dependency(d)+")")
-	}
-	for _, d := range j.Ended {
-		deps = append(deps, "ended("+dependency(d)+")")
-	}
-	if len(deps) > 0 {
-		parts = append(parts, "-w", quote(strings.Join(deps, " && ")))
+	if dependencies := j.dependencyExpression(); dependencies != "" {
+		parts = append(parts, "-w", quote(dependencies))
 	}
 	if j.Checkpoint {
 		j.Command = "cr_run " + j.Command
