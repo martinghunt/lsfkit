@@ -3,6 +3,7 @@ package lsf
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,31 +12,40 @@ import (
 	"strings"
 )
 
-// Job is an LSF job submission.
+var (
+	numericDependencyRE = regexp.MustCompile(`^[0-9]+$`)
+	safeShellArgRE      = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
+	jobIDRE             = regexp.MustCompile(`(?m)^Job <([0-9]+)> is submitted to`)
+)
+
+// Job describes an LSF job submission.
 type Job struct {
-	Out, Err, Name, Queue, Command                                            string
-	CommandArgs                                                               []string
-	MemoryGB, TmpSpaceGB                                                      float64
-	Threads, ArrayStart, ArrayEnd, ArrayLimit, CheckpointPeriod, TokensNumber int
-	Checkpoint, Interactive                                                   bool
-	CheckpointDir, MemoryUnits, TokensName                                    string
-	Done, Ended                                                               []string
+	Out              string
+	Err              string
+	Name             string
+	Queue            string
+	CommandArgs      []string
+	MemoryGB         float64
+	TmpSpaceGB       float64
+	Threads          int
+	ArrayStart       int
+	ArrayEnd         int
+	ArrayLimit       int
+	CheckpointPeriod int
+	TokensNumber     int
+	Checkpoint       bool
+	Interactive      bool
+	CheckpointDir    string
+	MemoryUnits      string
+	TokensName       string
+	Done             []string
+	Ended            []string
 }
 
-// InteractiveArgs returns the bsub argument vector for an interactive job.
-// CommandArgs must contain the original, already shell-parsed command words.
-func (j Job) InteractiveArgs() ([]string, error) {
-	if !j.Interactive {
-		return nil, fmt.Errorf("interactive execution requires an interactive job")
-	}
-	if len(j.CommandArgs) == 0 {
-		return nil, fmt.Errorf("interactive execution requires command arguments")
-	}
-	if j.ArrayStart != 0 || j.ArrayEnd != 0 {
-		return nil, fmt.Errorf("--interactive cannot be used with a job array")
-	}
-	if j.Checkpoint {
-		return nil, fmt.Errorf("--interactive cannot be used with checkpointing")
+// Args returns the exact argument vector to pass to bsub.
+func (j Job) Args() ([]string, error) {
+	if err := j.validate(); err != nil {
+		return nil, err
 	}
 
 	outputSpecified := j.Out != "" || j.Err != ""
@@ -45,7 +55,7 @@ func (j Job) InteractiveArgs() ([]string, error) {
 	if j.Err == "" {
 		j.Err = j.Name + ".e"
 	}
-	if outputSpecified {
+	if !j.Interactive || outputSpecified {
 		if err := validateLogFiles(j.Out, j.Err); err != nil {
 			return nil, err
 		}
@@ -55,7 +65,21 @@ func (j Job) InteractiveArgs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := []string{"-Is"}
+	args := make([]string, 0, 24+len(j.CommandArgs))
+	if j.Interactive {
+		args = append(args, "-Is")
+	}
+	if j.Checkpoint {
+		dir := j.CheckpointDir
+		if dir == "" {
+			dir = j.Out + ".checkpoint"
+		}
+		absoluteDir, err := filepath.Abs(dir)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "-k", absoluteDir+" method=blcr "+strconv.Itoa(j.CheckpointPeriod))
+	}
 	if j.Queue != "" {
 		args = append(args, "-q", j.Queue)
 	}
@@ -66,18 +90,62 @@ func (j Job) InteractiveArgs() ([]string, error) {
 		args = append(args, "-n", strconv.Itoa(j.Threads))
 	}
 	args = append(args, "-R", resource, "-M", maxMemory)
-	if outputSpecified {
+
+	jobName := j.Name
+	if j.ArrayStart > 0 {
+		args = append(args, "-o", j.Out+".%I", "-e", j.Err+".%I")
+		jobName = fmt.Sprintf("%s[%d-%d]%%%d", j.Name, j.ArrayStart, j.ArrayEnd, j.ArrayLimit)
+	} else if !j.Interactive || outputSpecified {
 		args = append(args, "-o", j.Out, "-e", j.Err)
 	}
-	args = append(args, "-J", j.Name)
-
+	args = append(args, "-J", jobName)
 	if dependencies := j.dependencyExpression(); dependencies != "" {
 		args = append(args, "-w", dependencies)
 	}
-	return append(args, j.CommandArgs...), nil
+
+	commandArgs := append([]string(nil), j.CommandArgs...)
+	if j.ArrayStart > 0 {
+		for i := range commandArgs {
+			commandArgs[i] = strings.ReplaceAll(commandArgs[i], "INDEX", "$LSB_JOBINDEX")
+		}
+	}
+	if j.Checkpoint {
+		commandArgs = append([]string{"cr_run"}, commandArgs...)
+	}
+	return append(args, commandArgs...), nil
 }
 
-func memoryMB(gb float64) int { return int(1000 * (float64(int(gb*1000+0.5)) / 1000)) }
+func (j Job) validate() error {
+	if len(j.CommandArgs) == 0 {
+		return fmt.Errorf("no command given")
+	}
+	if j.MemoryGB < 0 || j.TmpSpaceGB < 0 {
+		return fmt.Errorf("memory and temporary space must not be negative")
+	}
+	if j.Threads < 1 {
+		return fmt.Errorf("threads must be at least 1")
+	}
+	if (j.ArrayStart == 0) != (j.ArrayEnd == 0) {
+		return fmt.Errorf("--start and --end must be supplied together")
+	}
+	if j.ArrayStart < 0 || j.ArrayEnd < j.ArrayStart {
+		return fmt.Errorf("array end must be at least array start")
+	}
+	if j.ArrayStart > 0 && j.ArrayLimit < 1 {
+		return fmt.Errorf("array limit must be at least 1")
+	}
+	if j.Interactive && j.ArrayStart != 0 {
+		return fmt.Errorf("--interactive cannot be used with a job array")
+	}
+	if j.Interactive && j.Checkpoint {
+		return fmt.Errorf("--interactive cannot be used with checkpointing")
+	}
+	return nil
+}
+
+func memoryMB(gb float64) int {
+	return int(math.Round(gb * 1000))
+}
 
 func (j Job) resourceRequest() (string, string, error) {
 	units, err := j.memoryUnits()
@@ -132,6 +200,15 @@ func (j Job) dependencyExpression() string {
 	return strings.Join(dependencies, " && ")
 }
 
+func dependency(value string) string {
+	if numericDependencyRE.MatchString(value) {
+		return value
+	}
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `"`, `\"`)
+	return `"` + value + `"`
+}
+
 func (j Job) memoryUnits() (string, error) {
 	if j.MemoryUnits != "" {
 		return validUnits(j.MemoryUnits)
@@ -139,9 +216,9 @@ func (j Job) memoryUnits() (string, error) {
 	if units := os.Getenv("FARMPY_LSF_MEMORY_UNITS"); units != "" {
 		return validUnits(units)
 	}
-	host, hostErr := os.Hostname()
-	if hostErr != nil {
-		return "", fmt.Errorf("get hostname for LSF memory-unit lookup: %w", hostErr)
+	host, err := os.Hostname()
+	if err != nil {
+		return "", fmt.Errorf("get hostname for LSF memory-unit lookup: %w", err)
 	}
 	out, err := exec.Command("lsadmin", "showconf", "lim", host).Output()
 	if err != nil {
@@ -155,114 +232,58 @@ func (j Job) memoryUnits() (string, error) {
 	}
 	return "KB", nil
 }
-func validUnits(s string) (string, error) {
-	if s == "KB" || s == "MB" {
-		return s, nil
+
+func validUnits(units string) (string, error) {
+	if units == "KB" || units == "MB" {
+		return units, nil
 	}
-	return "", fmt.Errorf("invalid LSF memory units %q (want KB or MB)", s)
+	return "", fmt.Errorf("invalid LSF memory units %q (want KB or MB)", units)
 }
 
-func quote(s string) string {
-	if s == "" {
-		return "''"
+func shellQuote(arg string) string {
+	if safeShellArgRE.MatchString(arg) {
+		return arg
 	}
-	return "'" + strings.ReplaceAll(s, "'", "'\\\"'\\\"'") + "'"
+	return "'" + strings.ReplaceAll(arg, "'", "'\"'\"'") + "'"
 }
 
-// String returns the exact shell command that will be submitted.
+// CommandString returns a shell-safe representation of a bsub argument vector.
+func CommandString(args []string) string {
+	parts := make([]string, 1, len(args)+1)
+	parts[0] = "bsub"
+	for _, arg := range args {
+		parts = append(parts, shellQuote(arg))
+	}
+	return strings.Join(parts, " ")
+}
+
+// String validates the job and returns its shell-safe bsub command.
 func (j Job) String() (string, error) {
-	if j.Command == "" {
-		return "", fmt.Errorf("no command given")
-	}
-	outputSpecified := j.Out != "" || j.Err != ""
-	if j.Out == "" {
-		j.Out = j.Name + ".o"
-	}
-	if (j.ArrayStart == 0) != (j.ArrayEnd == 0) {
-		return "", fmt.Errorf("--start and --end must be supplied together")
-	}
-	if j.Interactive && j.ArrayStart != 0 {
-		return "", fmt.Errorf("--interactive cannot be used with a job array")
-	}
-	if j.Err == "" {
-		j.Err = j.Name + ".e"
-	}
-	if err := validateLogFiles(j.Out, j.Err); err != nil {
-		return "", err
-	}
-	resource, maxMemory, err := j.resourceRequest()
+	args, err := j.Args()
 	if err != nil {
 		return "", err
 	}
-	parts := []string{"bsub"}
-	if j.Interactive {
-		parts = append(parts, "-Is")
-	}
-	if j.Checkpoint {
-		dir := j.CheckpointDir
-		if dir == "" {
-			dir = j.Out + ".checkpoint"
-		}
-		abs, err := filepath.Abs(dir)
-		if err != nil {
-			return "", err
-		}
-		parts = append(parts, "-k", quote(abs+" method=blcr "+strconv.Itoa(j.CheckpointPeriod)))
-	}
-	if j.Queue != "" {
-		parts = append(parts, "-q", quote(j.Queue))
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		parts = append(parts, "-E", quote("test -e "+home))
-	}
-	if j.Threads > 1 {
-		parts = append(parts, "-n", strconv.Itoa(j.Threads))
-	}
-	parts = append(parts, "-R", quote(resource), "-M", maxMemory)
-	if j.ArrayStart > 0 {
-		if j.ArrayEnd < j.ArrayStart {
-			return "", fmt.Errorf("array end must be at least array start")
-		}
-		parts = append(parts, "-o", quote(j.Out+".%I"), "-e", quote(j.Err+".%I"), "-J", quote(fmt.Sprintf("%s[%d-%d]%%%d", j.Name, j.ArrayStart, j.ArrayEnd, j.ArrayLimit)))
-		j.Command = strings.ReplaceAll(j.Command, "INDEX", "\\$LSB_JOBINDEX")
-	} else {
-		if !j.Interactive || outputSpecified {
-			parts = append(parts, "-o", quote(j.Out), "-e", quote(j.Err))
-		}
-		parts = append(parts, "-J", quote(j.Name))
-	}
-	if dependencies := j.dependencyExpression(); dependencies != "" {
-		parts = append(parts, "-w", quote(dependencies))
-	}
-	if j.Checkpoint {
-		j.Command = "cr_run " + j.Command
-	}
-	parts = append(parts, j.Command)
-	return strings.Join(parts, " "), nil
+	return CommandString(args), nil
 }
 
-var numeric = regexp.MustCompile(`^[0-9]+$`)
-
-func dependency(s string) string {
-	if numeric.MatchString(s) {
-		return s
-	}
-	return `"` + strings.ReplaceAll(s, `"`, `\\"`) + `"`
-}
-
-// Submit runs bsub and returns its numeric job ID.
-func (j Job) Submit() (string, error) {
-	command, err := j.String()
-	if err != nil {
-		return "", err
-	}
-	out, err := exec.Command("sh", "-c", command).CombinedOutput()
+// SubmitArgs runs bsub with a prepared argument vector and returns its job ID.
+func SubmitArgs(args []string) (string, error) {
+	out, err := exec.Command("bsub", args...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("bsub failed: %w\n%s", err, out)
 	}
-	matches := regexp.MustCompile(`(?m)^Job <([0-9]+)> is submitted to`).FindStringSubmatch(string(out))
+	matches := jobIDRE.FindStringSubmatch(string(out))
 	if matches == nil {
 		return "", fmt.Errorf("could not get job ID from bsub output:\n%s", out)
 	}
 	return matches[1], nil
+}
+
+// Submit validates and submits the job.
+func (j Job) Submit() (string, error) {
+	args, err := j.Args()
+	if err != nil {
+		return "", err
+	}
+	return SubmitArgs(args)
 }

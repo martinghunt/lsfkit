@@ -12,94 +12,105 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var ostatsOptions struct {
-	outfile, timeUnits  string
-	all, fails, summary bool
+type ostatsOptions struct {
+	outfile  string
+	timeUnit string
+	all      bool
+	fails    bool
+	summary  bool
 }
-var ostatsCmd = &cobra.Command{
-	Use:   "ostats [options] <output-files...>",
-	Short: "Gather stats from finished LSF output files",
-	Args:  cobra.MinimumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		var out io.Writer
-		if ostatsOptions.outfile == "-" {
-			out = cmd.OutOrStdout()
-		} else {
-			f, e := os.Create(ostatsOptions.outfile)
-			if e != nil {
-				return e
+
+func newOstatsCommand() *cobra.Command {
+	options := ostatsOptions{}
+	command := &cobra.Command{
+		Use:   "ostats [options] <output-files...>",
+		Short: "Gather stats from finished LSF output files",
+		Args:  cobra.MinimumNArgs(1),
+		PreRunE: func(_ *cobra.Command, _ []string) error {
+			if options.timeUnit != "s" && options.timeUnit != "m" && options.timeUnit != "h" {
+				return fmt.Errorf("--time-units must be s, m, or h")
 			}
-			defer f.Close()
-			out = f
-		}
-		w := bufio.NewWriter(out)
-		defer w.Flush()
-		columns := ostats.ShortColumns
-		if ostatsOptions.all {
-			columns = ostats.AllColumns
-		}
-		counts := map[string]int{}
-		noData := 0
-		if !ostatsOptions.summary {
-			fmt.Fprintln(w, strings.Join(append(columns, "filename"), "\t"))
-		}
-		for _, name := range args {
-			records, e := ostats.ReadFile(name)
-			if e != nil {
-				return fmt.Errorf("read %q: %w", name, e)
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, filenames []string) error {
+			if options.outfile == "-" {
+				return writeOstats(cmd.OutOrStdout(), filenames, options)
 			}
-			if len(records) == 0 {
+			output, err := os.Create(options.outfile)
+			if err != nil {
+				return err
+			}
+			if err := writeOstats(output, filenames, options); err != nil {
+				_ = output.Close()
+				return err
+			}
+			return output.Close()
+		},
+	}
+
+	flags := command.Flags()
+	flags.StringVarP(&options.outfile, "outfile", "o", "-", "output file (- for stdout)")
+	flags.StringVar(&options.timeUnit, "time-units", "h", "time units: s, m, or h")
+	flags.BoolVarP(&options.all, "all-columns", "a", false, "output all columns")
+	flags.BoolVarP(&options.fails, "fails", "f", false, "output only failed jobs")
+	flags.BoolVarP(&options.summary, "summary", "s", false, "summarize exit codes")
+	return command
+}
+
+func writeOstats(output io.Writer, filenames []string, options ostatsOptions) error {
+	writer := bufio.NewWriter(output)
+	columns := ostats.ShortColumns
+	if options.all {
+		columns = ostats.AllColumns
+	}
+	counts := map[string]int{}
+	noData := 0
+	if !options.summary {
+		header := append([]string(nil), columns...)
+		header = append(header, "filename")
+		fmt.Fprintln(writer, strings.Join(header, "\t"))
+	}
+
+	for _, filename := range filenames {
+		records, err := ostats.ReadFile(filename)
+		if err != nil {
+			return fmt.Errorf("read %q: %w", filename, err)
+		}
+		if len(records) == 0 {
+			noData++
+			continue
+		}
+		for _, record := range records {
+			if !ostats.HasData(record) {
 				noData++
 				continue
 			}
-			for _, record := range records {
-				if !ostats.HasData(record) {
-					noData++
-					continue
-				}
-				code := ostats.Row(record, []string{"exit_code"}, ostatsOptions.timeUnits)[0]
-				counts[code]++
-				if ostatsOptions.fails && code == "0" {
-					continue
-				}
-				if !ostatsOptions.summary {
-					fmt.Fprintln(w, strings.Join(append(ostats.Row(record, columns, ostatsOptions.timeUnits), name), "\t"))
-				}
+			code := ostats.Row(record, []string{"exit_code"}, options.timeUnit)[0]
+			counts[code]++
+			if options.fails && code == "0" {
+				continue
+			}
+			if !options.summary {
+				row := ostats.Row(record, columns, options.timeUnit)
+				row = append(row, filename)
+				fmt.Fprintln(writer, strings.Join(row, "\t"))
 			}
 		}
-		if ostatsOptions.summary {
-			fmt.Fprintln(w, "exit_code\tcount")
-			keys := make([]string, 0, len(counts))
-			for k := range counts {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				fmt.Fprintf(w, "%s\t%d\n", k, counts[k])
-			}
-			if noData > 0 {
-				fmt.Fprintf(w, "No_data\t%d\n", noData)
-			}
-		}
-		return nil
-	},
-}
-
-func init() {
-	f := ostatsCmd.Flags()
-	f.StringVarP(&ostatsOptions.outfile, "outfile", "o", "-", "output file (- for stdout)")
-	f.StringVar(&ostatsOptions.timeUnits, "time-units", "h", "time units: s, m, or h")
-	f.BoolVarP(&ostatsOptions.all, "all-columns", "a", false, "output all columns")
-	f.BoolVarP(&ostatsOptions.fails, "fails", "f", false, "output only failed jobs")
-	f.BoolVarP(&ostatsOptions.summary, "summary", "s", false, "summarize exit codes")
-	f.Bool("longer", false, "deprecated alias for --all-columns")
-	ostatsCmd.PreRunE = func(cmd *cobra.Command, args []string) error {
-		if cmd.Flags().Changed("longer") {
-			ostatsOptions.all = true
-		}
-		if ostatsOptions.timeUnits != "s" && ostatsOptions.timeUnits != "m" && ostatsOptions.timeUnits != "h" {
-			return fmt.Errorf("--time-units must be s, m, or h")
-		}
-		return nil
 	}
+
+	if options.summary {
+		fmt.Fprintln(writer, "exit_code\tcount")
+		keys := make([]string, 0, len(counts))
+		for code := range counts {
+			keys = append(keys, code)
+		}
+		sort.Strings(keys)
+		for _, code := range keys {
+			fmt.Fprintf(writer, "%s\t%d\n", code, counts[code])
+		}
+		if noData > 0 {
+			fmt.Fprintf(writer, "No_data\t%d\n", noData)
+		}
+	}
+	return writer.Flush()
 }

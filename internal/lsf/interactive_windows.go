@@ -9,3 +9,8 @@ import "fmt"
 func (j Job) ExecInteractive() error {
 	return fmt.Errorf("interactive LSF jobs are not supported on Windows")
 }
+
+// ExecInteractiveArgs is unavailable on Windows.
+func ExecInteractiveArgs(_ []string) error {
+	return fmt.Errorf("interactive LSF jobs are not supported on Windows")
+}

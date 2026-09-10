@@ -17,6 +17,7 @@ jobs:
       - name: Check Go formatting
         run: test -z "$(gofmt -l $(find cmd internal -name '*.go' -type f))"
 
+      - run: go vet ./...
       - run: go test ./...
       - run: ./build.sh --release --version "${GITHUB_REF_NAME}"
       - uses: softprops/action-gh-release@v2

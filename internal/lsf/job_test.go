@@ -1,6 +1,8 @@
 package lsf
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -12,7 +14,7 @@ func TestJobString(t *testing.T) {
 		Out:         "out",
 		Err:         "err",
 		MemoryGB:    1.5,
-		Command:     "echo INDEX",
+		CommandArgs: []string{"echo", "INDEX"},
 		MemoryUnits: "MB",
 		Threads:     2,
 		ArrayStart:  1,
@@ -24,7 +26,7 @@ func TestJobString(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, want := range []string{"-J 'a very long job name[1-3]%2'", "-M 1500", "echo \\$LSB_JOBINDEX", "done(42) && done(\"another job\")"} {
+	for _, want := range []string{"-J 'a very long job name[1-3]%2'", "-M 1500", "echo '$LSB_JOBINDEX'", "done(42) && done(\"another job\")"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("%q missing from %s", want, got)
 		}
@@ -33,9 +35,9 @@ func TestJobString(t *testing.T) {
 
 func TestJobValidation(t *testing.T) {
 	jobs := []Job{
-		{Name: "x", Command: "echo", MemoryUnits: "bad"},
-		{Name: "x", Command: "", MemoryUnits: "MB"},
-		{Name: "x", Command: "x", MemoryUnits: "MB", ArrayStart: 3, ArrayEnd: 2},
+		{Name: "x", CommandArgs: []string{"echo"}, Threads: 1, MemoryUnits: "bad"},
+		{Name: "x", Threads: 1, MemoryUnits: "MB"},
+		{Name: "x", CommandArgs: []string{"x"}, Threads: 1, MemoryUnits: "MB", ArrayStart: 3, ArrayEnd: 2},
 	}
 	for _, j := range jobs {
 		if _, e := j.String(); e == nil {
@@ -47,9 +49,10 @@ func TestJobValidation(t *testing.T) {
 func TestInteractiveJobString(t *testing.T) {
 	job := Job{
 		Name:        "interactive-shell",
-		Command:     "bash",
+		CommandArgs: []string{"bash"},
 		MemoryGB:    1,
 		MemoryUnits: "MB",
+		Threads:     1,
 		Interactive: true,
 	}
 	got, err := job.String()
@@ -69,16 +72,17 @@ func TestInteractiveJobHonoursExplicitOutputFiles(t *testing.T) {
 		Name:        "interactive-shell",
 		Out:         "interactive.out",
 		Err:         "interactive.err",
-		Command:     "bash",
+		CommandArgs: []string{"bash"},
 		MemoryGB:    1,
 		MemoryUnits: "MB",
+		Threads:     1,
 		Interactive: true,
 	}
 	got, err := job.String()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "-o 'interactive.out' -e 'interactive.err'") {
+	if !strings.Contains(got, "-o interactive.out -e interactive.err") {
 		t.Fatalf("interactive job ignored explicit output files: %s", got)
 	}
 }
@@ -86,18 +90,60 @@ func TestInteractiveJobHonoursExplicitOutputFiles(t *testing.T) {
 func TestInteractiveArgsPreserveCommandWords(t *testing.T) {
 	job := Job{
 		Name:        "shell",
-		Command:     "bash -lc echo hello",
 		CommandArgs: []string{"bash", "-lc", "echo hello"},
 		MemoryGB:    1,
 		MemoryUnits: "MB",
+		Threads:     1,
 		Interactive: true,
 	}
-	args, err := job.InteractiveArgs()
+	args, err := job.Args()
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"bash", "-lc", "echo hello"}
 	if got := args[len(args)-len(want):]; !slices.Equal(got, want) {
 		t.Fatalf("command words changed: got %q, want %q", got, want)
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	if got, want := shellQuote("job'name"), `'job'"'"'name'`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestSubmitPassesCommandArgumentsDirectly(t *testing.T) {
+	tempDir := t.TempDir()
+	bsub := filepath.Join(tempDir, "bsub")
+	argsFile := filepath.Join(tempDir, "args")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$LSFKIT_TEST_ARGS\"\nprintf 'Job <42> is submitted to queue <normal>.\\n'\n"
+	if err := os.WriteFile(bsub, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("LSFKIT_TEST_ARGS", argsFile)
+
+	job := Job{
+		Name:        "argument-test",
+		CommandArgs: []string{"printf", "%s\\n", "hello world"},
+		MemoryGB:    1,
+		MemoryUnits: "MB",
+		Threads:     1,
+	}
+	id, err := job.Submit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "42" {
+		t.Fatalf("got job ID %q", id)
+	}
+	contents, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSuffix(string(contents), "\n"), "\n")
+	want := job.CommandArgs
+	if command := got[len(got)-len(want):]; !slices.Equal(command, want) {
+		t.Fatalf("command arguments changed: got %q, want %q", command, want)
 	}
 }

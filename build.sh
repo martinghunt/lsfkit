@@ -67,9 +67,8 @@ if [[ -z "$output_dir" ]]; then
 	fi
 fi
 
-mkdir -p "$output_dir" "$root_dir/.cache/gocache" "$root_dir/.cache/gomodcache"
+mkdir -p "$output_dir" "$root_dir/.cache/gocache"
 export GOCACHE="${GOCACHE:-$root_dir/.cache/gocache}"
-export GOMODCACHE="${GOMODCACHE:-$root_dir/.cache/gomodcache}"
 
 package_release_artifact() {
 	local goos="$1"

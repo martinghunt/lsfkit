@@ -8,20 +8,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use:          "lsfkit",
-	Short:        "LSF job submission and output statistics",
-	SilenceUsage: true,
+func newRootCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:          "lsfkit",
+		Short:        "LSF job submission and output statistics",
+		SilenceUsage: true,
+		Version:      buildinfo.Version,
+	}
+	command.AddCommand(newRunCommand(), newOstatsCommand())
+	return command
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := newRootCommand().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-}
-
-func init() {
-	rootCmd.Version = buildinfo.Version
-	rootCmd.AddCommand(runCmd, ostatsCmd)
 }

@@ -45,6 +45,29 @@ func TestReadMultipleRecords(t *testing.T) {
 	}
 }
 
+func TestReadTruncatedRecordFollowedByAppendedRerun(t *testing.T) {
+	input := `Sender: LSF System <first>
+Job <first attempt> was submitted from host <submit> by user <me> in cluster <cluster>.
+Exited with exit code 1.
+Sender: LSF System <second>
+Job <second attempt> was submitted from host <submit> by user <me> in cluster <cluster>.
+Successfully completed.
+`
+	records, err := Read(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("got %d records, want 2", len(records))
+	}
+	if *records[0].JobName != "first attempt" || *records[0].ExitCode != 1 {
+		t.Fatalf("unexpected first record: %#v", records[0])
+	}
+	if *records[1].JobName != "second attempt" || *records[1].ExitCode != 0 {
+		t.Fatalf("unexpected second record: %#v", records[1])
+	}
+}
+
 func TestTimeColumnsAreRoundedToTwoDecimalPlaces(t *testing.T) {
 	records, err := Read(strings.NewReader(notification))
 	if err != nil {

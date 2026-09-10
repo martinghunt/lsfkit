@@ -8,98 +8,101 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var runOptions struct {
-	out, err, checkpointDir, memoryUnits, tokensName, queue string
-	checkpoint, interactive, norun                          bool
-	checkpointPeriod                                        int
-	arrayLimit, start, end, threads, tokensNumber           int
-	memory, tmpSpace                                        float64
-	done, ended                                             []string
+type runOptions struct {
+	out              string
+	err              string
+	checkpointDir    string
+	memoryUnits      string
+	tokensName       string
+	queue            string
+	checkpoint       bool
+	interactive      bool
+	norun            bool
+	checkpointPeriod int
+	arrayLimit       int
+	start            int
+	end              int
+	threads          int
+	tokensNumber     int
+	tmpSpace         float64
+	done             []string
+	ended            []string
 }
-var runCmd = &cobra.Command{
-	Use:   "run [options] <memory-gb> <name> <command>",
-	Short: "Submit an LSF job",
-	Args:  cobra.MinimumNArgs(3),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		memory, err := strconv.ParseFloat(args[0], 64)
-		if err != nil || memory < 0 {
-			return fmt.Errorf("memory must be a non-negative number of GB")
-		}
 
-		job := lsf.Job{
-			Out:              runOptions.out,
-			Err:              runOptions.err,
-			Name:             args[1],
-			Command:          joinCommand(args[2:]),
-			CommandArgs:      args[2:],
-			MemoryGB:         memory,
-			TmpSpaceGB:       runOptions.tmpSpace,
-			Threads:          runOptions.threads,
-			ArrayStart:       runOptions.start,
-			ArrayEnd:         runOptions.end,
-			ArrayLimit:       runOptions.arrayLimit,
-			Checkpoint:       runOptions.checkpoint,
-			Interactive:      runOptions.interactive,
-			CheckpointDir:    runOptions.checkpointDir,
-			CheckpointPeriod: runOptions.checkpointPeriod,
-			MemoryUnits:      runOptions.memoryUnits,
-			TokensName:       runOptions.tokensName,
-			TokensNumber:     runOptions.tokensNumber,
-			Queue:            runOptions.queue,
-			Done:             runOptions.done,
-			Ended:            runOptions.ended,
-		}
+func newRunCommand() *cobra.Command {
+	options := runOptions{}
+	command := &cobra.Command{
+		Use:   "run [options] <memory-gb> <name> <command>",
+		Short: "Submit an LSF job",
+		Args:  cobra.MinimumNArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			memory, err := strconv.ParseFloat(args[0], 64)
+			if err != nil || memory < 0 {
+				return fmt.Errorf("memory must be a non-negative number of GB")
+			}
 
-		text, err := job.String()
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(cmd.OutOrStdout(), text)
+			job := lsf.Job{
+				Out:              options.out,
+				Err:              options.err,
+				Name:             args[1],
+				CommandArgs:      args[2:],
+				MemoryGB:         memory,
+				TmpSpaceGB:       options.tmpSpace,
+				Threads:          options.threads,
+				ArrayStart:       options.start,
+				ArrayEnd:         options.end,
+				ArrayLimit:       options.arrayLimit,
+				Checkpoint:       options.checkpoint,
+				Interactive:      options.interactive,
+				CheckpointDir:    options.checkpointDir,
+				CheckpointPeriod: options.checkpointPeriod,
+				MemoryUnits:      options.memoryUnits,
+				TokensName:       options.tokensName,
+				TokensNumber:     options.tokensNumber,
+				Queue:            options.queue,
+				Done:             options.done,
+				Ended:            options.ended,
+			}
 
-		if runOptions.norun {
+			bsubArgs, err := job.Args()
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), lsf.CommandString(bsubArgs))
+			if options.norun {
+				return nil
+			}
+			if options.interactive {
+				return lsf.ExecInteractiveArgs(bsubArgs)
+			}
+			id, err := lsf.SubmitArgs(bsubArgs)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), id, "submitted")
 			return nil
-		}
-		if runOptions.interactive {
-			return job.ExecInteractive()
-		}
-		id, err := job.Submit()
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(cmd.OutOrStdout(), id, "submitted")
-		return nil
-	},
-}
-
-func joinCommand(args []string) string {
-	result := ""
-	for i, a := range args {
-		if i > 0 {
-			result += " "
-		}
-		result += a
+		},
 	}
-	return result
-}
 
-func init() {
-	f := runCmd.Flags()
-	f.StringVarP(&runOptions.err, "err", "e", "", "stderr file (default: name.e)")
-	f.StringVarP(&runOptions.out, "out", "o", "", "stdout file (default: name.o)")
-	f.BoolVarP(&runOptions.checkpoint, "checkpoint", "c", false, "use checkpointing")
-	f.BoolVarP(&runOptions.interactive, "interactive", "i", false, "run interactively using bsub -Is")
-	f.StringVarP(&runOptions.checkpointDir, "checkpoint-dir", "d", "", "checkpoint directory")
-	f.IntVarP(&runOptions.checkpointPeriod, "checkpoint-period", "p", 600, "checkpoint period in minutes")
-	f.IntVar(&runOptions.arrayLimit, "array-limit", 100, "maximum concurrently running array jobs")
-	f.IntVar(&runOptions.start, "start", 0, "array start index")
-	f.IntVar(&runOptions.end, "end", 0, "array end index")
-	f.StringSliceVar(&runOptions.done, "done", nil, "depend on successfully completed job (repeatable)")
-	f.StringSliceVar(&runOptions.ended, "ended", nil, "depend on ended job (repeatable)")
-	f.StringVar(&runOptions.memoryUnits, "memory-units", "", "LSF memory units: KB or MB")
-	f.Float64Var(&runOptions.tmpSpace, "tmp-space", 0, "temporary space in GB")
-	f.IntVar(&runOptions.threads, "threads", 1, "requested threads")
-	f.StringVar(&runOptions.tokensName, "tokens-name", "", "resource token name")
-	f.IntVar(&runOptions.tokensNumber, "tokens-number", 100, "resource token value")
-	f.StringVarP(&runOptions.queue, "queue", "q", "", "queue")
-	f.BoolVar(&runOptions.norun, "norun", false, "print bsub command without submitting")
+	flags := command.Flags()
+	flags.StringVarP(&options.err, "err", "e", "", "stderr file (default: name.e)")
+	flags.StringVarP(&options.out, "out", "o", "", "stdout file (default: name.o)")
+	flags.BoolVarP(&options.checkpoint, "checkpoint", "c", false, "use checkpointing")
+	flags.BoolVarP(&options.interactive, "interactive", "i", false, "run interactively using bsub -Is")
+	flags.StringVarP(&options.checkpointDir, "checkpoint-dir", "d", "", "checkpoint directory")
+	flags.IntVarP(&options.checkpointPeriod, "checkpoint-period", "p", 600, "checkpoint period in minutes")
+	flags.IntVar(&options.arrayLimit, "array-limit", 100, "maximum concurrently running array jobs")
+	flags.IntVar(&options.start, "start", 0, "array start index")
+	flags.IntVar(&options.end, "end", 0, "array end index")
+	flags.StringSliceVar(&options.done, "done", nil, "depend on successfully completed job (repeatable)")
+	flags.StringSliceVar(&options.ended, "ended", nil, "depend on ended job (repeatable)")
+	flags.StringVar(&options.memoryUnits, "memory-units", "", "LSF memory units: KB or MB")
+	flags.Float64Var(&options.tmpSpace, "tmp-space", 0, "temporary space in GB")
+	flags.IntVar(&options.threads, "threads", 1, "requested threads")
+	flags.StringVar(&options.tokensName, "tokens-name", "", "resource token name")
+	flags.IntVar(&options.tokensNumber, "tokens-number", 100, "resource token value")
+	flags.StringVarP(&options.queue, "queue", "q", "", "queue")
+	flags.BoolVar(&options.norun, "norun", false, "print bsub command without submitting")
+	flags.SetInterspersed(false)
+	return command
 }
