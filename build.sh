@@ -77,7 +77,8 @@ package_release_artifact() {
 	local archive_base="$bin_name-$version-$goos-$goarch"
 
 	if [[ "$goos" == "windows" ]]; then
-		(cd "$output_dir" && zip -q "$archive_base.zip" "$(basename "$outfile")")
+		archive_base+=".exe"
+		(cd "$output_dir" && zip -q -m "$archive_base.zip" "$(basename "$outfile")")
 		artifacts+=("$archive_base.zip")
 	else
 		tar -C "$output_dir" -czf "$output_dir/$archive_base.tar.gz" "$(basename "$outfile")"
