@@ -104,10 +104,31 @@ func TestOstatsIncludesFilesWithoutLSFData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "exit_code\tcpu_time\twall_clock_time\tmax_memory\trequested_memory\tfilename\n" +
-		"*\t*\t*\t*\t*\t" + filename + "\n"
+	want := "number_in_file\texit_code\tcpu_time\twall_clock_time\tmax_memory\trequested_memory\tfilename\n" +
+		"1\t*\t*\t*\t*\t*\t" + filename + "\n"
 	if output != want {
 		t.Fatalf("unexpected output:\n%s", output)
+	}
+}
+
+func TestOstatsNumbersReportsWithinFile(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "repeated.o")
+	contents := "Sender: LSF System <first>\nSuccessfully completed.\n" +
+		"Sender: LSF System <second>\nExited with exit code 2.\n"
+	if err := os.WriteFile(filename, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := executeCommand(t, "ostats", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("got %d lines, want 3:\n%s", len(lines), output)
+	}
+	if !strings.HasPrefix(lines[1], "1\t0\t") || !strings.HasPrefix(lines[2], "2\t2\t") {
+		t.Fatalf("reports were not numbered:\n%s", output)
 	}
 }
 

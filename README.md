@@ -118,8 +118,8 @@ lsfkit run --interactive --memory-units MB 0.5 shell bash
 
 `ostats` reads the LSF notification blocks in one or more output files and
 writes tab-separated output. Time columns are rounded to two decimal places.
-By default it reports exit code, CPU time, wall-clock time, peak memory,
-requested memory, and source filename.
+By default it reports the one-based `number_in_file`, exit code, CPU time,
+wall-clock time, peak memory, requested memory, and source filename.
 
 ```bash
 # Report the standard columns in hours.
@@ -147,4 +147,5 @@ working directory, and job name. `ostats` safely handles output files whose
 last LSF notification is incomplete, including files to which a later rerun
 has appended another notification. By default files without usable LSF job data
 are omitted from tabular output; use `--include-no-data` to emit a row whose
-statistic columns are `*` for each such file.
+statistic columns are `*` for each such file. `number_in_file` identifies the
+one-based LSF notification position within its source file.

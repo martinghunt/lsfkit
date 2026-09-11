@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Add `lsfkit ostats --include-no-data` to emit a placeholder row for output files without usable LSF job data.
+- Add the one-based `number_in_file` column to `lsfkit ostats` output.
 
 ### Changed
 - Make `lsfkit --version` print `lsfkit vX.Y.Z`.

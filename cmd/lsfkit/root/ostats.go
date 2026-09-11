@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/martinghunt/lsfkit/internal/ostats"
@@ -68,7 +69,9 @@ func writeOstats(output io.Writer, filenames []string, options ostatsOptions) er
 	counts := map[string]int{}
 	noData := 0
 	if !options.summary {
-		header := append([]string(nil), columns...)
+		header := make([]string, 0, len(columns)+2)
+		header = append(header, "number_in_file")
+		header = append(header, columns...)
 		header = append(header, "filename")
 		fmt.Fprintln(writer, strings.Join(header, "\t"))
 	}
@@ -81,15 +84,16 @@ func writeOstats(output io.Writer, filenames []string, options ostatsOptions) er
 		if len(records) == 0 {
 			noData++
 			if options.includeNoData && !options.summary {
-				writeNoDataRow(writer, columns, filename, options.timeUnit)
+				writeNoDataRow(writer, columns, 1, filename, options.timeUnit)
 			}
 			continue
 		}
-		for _, record := range records {
+		for number, record := range records {
+			number++
 			if !ostats.HasData(record) {
 				noData++
 				if options.includeNoData && !options.summary {
-					writeNoDataRow(writer, columns, filename, options.timeUnit)
+					writeNoDataRow(writer, columns, number, filename, options.timeUnit)
 				}
 				continue
 			}
@@ -99,7 +103,9 @@ func writeOstats(output io.Writer, filenames []string, options ostatsOptions) er
 				continue
 			}
 			if !options.summary {
-				row := ostats.Row(record, columns, options.timeUnit)
+				row := make([]string, 0, len(columns)+2)
+				row = append(row, strconv.Itoa(number))
+				row = append(row, ostats.Row(record, columns, options.timeUnit)...)
 				row = append(row, filename)
 				fmt.Fprintln(writer, strings.Join(row, "\t"))
 			}
@@ -123,8 +129,10 @@ func writeOstats(output io.Writer, filenames []string, options ostatsOptions) er
 	return writer.Flush()
 }
 
-func writeNoDataRow(writer io.Writer, columns []string, filename, timeUnit string) {
-	row := ostats.Row(ostats.Stats{}, columns, timeUnit)
+func writeNoDataRow(writer io.Writer, columns []string, number int, filename, timeUnit string) {
+	row := make([]string, 0, len(columns)+2)
+	row = append(row, strconv.Itoa(number))
+	row = append(row, ostats.Row(ostats.Stats{}, columns, timeUnit)...)
 	row = append(row, filename)
 	fmt.Fprintln(writer, strings.Join(row, "\t"))
 }
