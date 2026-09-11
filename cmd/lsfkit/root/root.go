@@ -15,6 +15,7 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage: true,
 		Version:      buildinfo.Version,
 	}
+	command.SetVersionTemplate("{{.Name}} {{.Version}}\n")
 	command.AddCommand(newRunCommand(), newOstatsCommand(), newUpdateCommand())
 	return command
 }

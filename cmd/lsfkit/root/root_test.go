@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/martinghunt/lsfkit/internal/buildinfo"
 )
 
 func executeCommand(t *testing.T, args ...string) (string, error) {
@@ -35,6 +37,20 @@ func TestRunNorunPreservesCommandArguments(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Errorf("preview does not contain %q:\n%s", want, output)
 		}
+	}
+}
+
+func TestVersionOutput(t *testing.T) {
+	oldVersion := buildinfo.Version
+	t.Cleanup(func() { buildinfo.Version = oldVersion })
+	buildinfo.Version = "v1.2.3"
+
+	output, err := executeCommand(t, "--version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output != "lsfkit v1.2.3\n" {
+		t.Fatalf("version output = %q", output)
 	}
 }
 
