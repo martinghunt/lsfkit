@@ -131,6 +131,9 @@ lsfkit ostats --time-units m --all-columns *.o
 # Show only failed jobs.
 lsfkit ostats --fails *.o
 
+# Retain a placeholder row for output files with no LSF notification.
+lsfkit ostats --include-no-data *.o
+
 # Summarize exit codes instead of printing one row per job.
 lsfkit ostats --summary *.o
 
@@ -142,4 +145,6 @@ lsfkit ostats --outfile job-stats.tsv *.o
 also includes process and thread counts, timestamps, execution host, user,
 working directory, and job name. `ostats` safely handles output files whose
 last LSF notification is incomplete, including files to which a later rerun
-has appended another notification.
+has appended another notification. By default files without usable LSF job data
+are omitted from tabular output; use `--include-no-data` to emit a row whose
+statistic columns are `*` for each such file.

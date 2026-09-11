@@ -78,6 +78,23 @@ func TestOstatsSummary(t *testing.T) {
 	}
 }
 
+func TestOstatsIncludesFilesWithoutLSFData(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "unlogged.o")
+	if err := os.WriteFile(filename, []byte("application output only\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := executeCommand(t, "ostats", "--include-no-data", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "exit_code\tcpu_time\twall_clock_time\tmax_memory\trequested_memory\tfilename\n" +
+		"*\t*\t*\t*\t*\t" + filename + "\n"
+	if output != want {
+		t.Fatalf("unexpected output:\n%s", output)
+	}
+}
+
 func TestOstatsRejectsBadTimeUnits(t *testing.T) {
 	_, err := executeCommand(t, "ostats", "--time-units", "days", "job.o")
 	if err == nil || !strings.Contains(err.Error(), "must be s, m, or h") {

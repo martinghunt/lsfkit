@@ -13,11 +13,12 @@ import (
 )
 
 type ostatsOptions struct {
-	outfile  string
-	timeUnit string
-	all      bool
-	fails    bool
-	summary  bool
+	outfile       string
+	timeUnit      string
+	all           bool
+	fails         bool
+	includeNoData bool
+	summary       bool
 }
 
 func newOstatsCommand() *cobra.Command {
@@ -53,6 +54,7 @@ func newOstatsCommand() *cobra.Command {
 	flags.StringVar(&options.timeUnit, "time-units", "h", "time units: s, m, or h")
 	flags.BoolVarP(&options.all, "all-columns", "a", false, "output all columns")
 	flags.BoolVarP(&options.fails, "fails", "f", false, "output only failed jobs")
+	flags.BoolVar(&options.includeNoData, "include-no-data", false, "include a placeholder row for files without LSF job data")
 	flags.BoolVarP(&options.summary, "summary", "s", false, "summarize exit codes")
 	return command
 }
@@ -78,11 +80,17 @@ func writeOstats(output io.Writer, filenames []string, options ostatsOptions) er
 		}
 		if len(records) == 0 {
 			noData++
+			if options.includeNoData && !options.summary {
+				writeNoDataRow(writer, columns, filename, options.timeUnit)
+			}
 			continue
 		}
 		for _, record := range records {
 			if !ostats.HasData(record) {
 				noData++
+				if options.includeNoData && !options.summary {
+					writeNoDataRow(writer, columns, filename, options.timeUnit)
+				}
 				continue
 			}
 			code := ostats.Row(record, []string{"exit_code"}, options.timeUnit)[0]
@@ -113,4 +121,10 @@ func writeOstats(output io.Writer, filenames []string, options ostatsOptions) er
 		}
 	}
 	return writer.Flush()
+}
+
+func writeNoDataRow(writer io.Writer, columns []string, filename, timeUnit string) {
+	row := ostats.Row(ostats.Stats{}, columns, timeUnit)
+	row = append(row, filename)
+	fmt.Fprintln(writer, strings.Join(row, "\t"))
 }
