@@ -213,7 +213,7 @@ func (j Job) memoryUnits() (string, error) {
 	if j.MemoryUnits != "" {
 		return validUnits(j.MemoryUnits)
 	}
-	if units := os.Getenv("FARMPY_LSF_MEMORY_UNITS"); units != "" {
+	if units := os.Getenv("LSFKIT_LSF_MEMORY_UNITS"); units != "" {
 		return validUnits(units)
 	}
 	host, err := os.Hostname()
@@ -222,7 +222,7 @@ func (j Job) memoryUnits() (string, error) {
 	}
 	out, err := exec.Command("lsadmin", "showconf", "lim", host).Output()
 	if err != nil {
-		return "", fmt.Errorf("get LSF memory units: run lsadmin showconf lim or set FARMPY_LSF_MEMORY_UNITS to KB or MB: %w", err)
+		return "", fmt.Errorf("get LSF memory units: run lsadmin showconf lim or set LSFKIT_LSF_MEMORY_UNITS to KB or MB: %w", err)
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Fields(line)

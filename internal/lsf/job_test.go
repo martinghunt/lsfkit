@@ -46,6 +46,30 @@ func TestJobValidation(t *testing.T) {
 	}
 }
 
+func TestMemoryUnitsFromEnvironment(t *testing.T) {
+	t.Setenv("LSFKIT_LSF_MEMORY_UNITS", "MB")
+
+	units, err := (Job{}).memoryUnits()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if units != "MB" {
+		t.Fatalf("memory units = %q, want MB", units)
+	}
+}
+
+func TestExplicitMemoryUnitsOverrideEnvironment(t *testing.T) {
+	t.Setenv("LSFKIT_LSF_MEMORY_UNITS", "MB")
+
+	units, err := (Job{MemoryUnits: "KB"}).memoryUnits()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if units != "KB" {
+		t.Fatalf("memory units = %q, want KB", units)
+	}
+}
+
 func TestInteractiveJobString(t *testing.T) {
 	job := Job{
 		Name:        "interactive-shell",

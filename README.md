@@ -1,32 +1,145 @@
 # lsfkit
 
-`lsfkit` is a pure-Go LSF helper, replacing the `bsub.py` and
-`bsub_out_to_stats` scripts from Farmpy.
+`lsfkit` is a pure-Go command-line tool for submitting LSF jobs and collecting
+statistics from their output files. It provides `run` for job submission and
+`ostats` for reading LSF job notifications. This repository was developed with
+substantial coding assistance from [OpenAI Codex](https://openai.com/codex),
+which helped with implementation, refactoring, tests, documentation, and
+benchmarking under human direction and review.
 
-```sh
-lsfkit run --norun --memory-units MB 4 align 'aligner reads.fq'
-lsfkit run --interactive --memory-units MB 4 interactive-shell bash
-lsfkit ostats --all-columns --time-units h align.o
-lsfkit ostats --summary *.o
+## Install
+
+Download a prebuilt Linux binary from the [latest GitHub
+release](https://github.com/martinghunt/lsfkit/releases/latest). Releases are
+available for Linux amd64 and arm64, with a SHA-256 checksum file for verifying
+the downloaded archive.
+
+After extracting the archive, place `lsfkit` somewhere on your `PATH`, then
+check the installation:
+
+```bash
+lsfkit --version
+```
+
+`run` requires the LSF command-line client, including `bsub`. It uses `lsadmin`
+to discover the LSF memory unit unless you provide `--memory-units` or set
+`LSFKIT_LSF_MEMORY_UNITS` to `KB` or `MB`. The command-line option takes
+precedence over the environment variable. `ostats` only reads local LSF output
+files and does not require an LSF installation.
+
+To update an installed release binary:
+
+```bash
+lsfkit update
 lsfkit update --check
 ```
 
-`run` submits LSF jobs, including arrays, dependencies, checkpoints, resource
-tokens and memory requests. `ostats` reads LSF notification blocks; it safely
-accepts an output file whose final notification lacks the traditional stderr
-footer. Job names and filenames are always emitted in full.
+`update` verifies the downloaded archive against the published SHA-256
+checksum before replacing the binary. It is available for the Linux release
+platforms; a local `dev` build requires `--force` to update.
 
-`run --interactive` replaces `lsfkit` with `bsub -Is`, leaving bsub directly
-attached to your terminal until the interactive command exits. It does not add
-default `-o`/`-e` files, so the remote shell remains visible in your terminal.
+To build locally instead:
 
-`lsfkit update` downloads the latest GitHub release for the current supported
-Linux platform, verifies its SHA-256 checksum, and replaces the running binary.
-Use `lsfkit update --check` to check without installing or `--force` when
-running a development build.
+```bash
+./build.sh
+```
 
-Build locally for the host platform with `./build.sh`, or select a test target
-with `--os` and `--arch`. `./build.sh --all` builds the complete cross-platform
-test matrix. `./build.sh --release --version vX.Y.Z` packages Linux amd64 and
-arm64 releases with checksums. Pushing a matching version tag runs the same
-release process in GitHub Actions.
+That builds for the current OS and architecture in `./build/`. This is useful
+for local development and command-line testing on macOS. To cross-compile a
+specific target, use `--os` and `--arch`; `./build.sh --all` builds the complete
+test matrix. `./build.sh --release --version vX.Y.Z` creates the Linux release
+archives and checksums.
+
+## Usage
+
+`lsfkit` has three commands:
+
+- `lsfkit run`: submit an LSF job
+- `lsfkit ostats`: report statistics from LSF output files
+- `lsfkit update`: update an installed Linux release binary
+
+Use `lsfkit --help` for top-level help and `lsfkit COMMAND --help` for the
+options of a command.
+
+### Submit jobs with `run`
+
+The basic form is:
+
+```bash
+lsfkit run [options] <memory-gb> <job-name> <command> [command-arguments...]
+```
+
+`memory-gb` is a non-negative decimal value in GB. Options must appear before
+the positional arguments. Unless overridden with `--out` and `--err`, output is
+written to `<job-name>.o` and `<job-name>.e`. Full job names and filenames are
+passed to LSF unchanged.
+
+Examples:
+
+```bash
+# Submit a one-thread job using 4 GB and the LSF memory unit reported by lsadmin.
+lsfkit run 4 align aligner reads.fq
+
+# Make the memory-unit choice explicit and choose a queue and log files.
+lsfkit run --memory-units MB --queue long --out logs/align.o --err logs/align.e \
+  8 align aligner reads.fq
+
+# Inspect the bsub command without submitting anything.
+lsfkit run --norun --memory-units MB 4 align aligner reads.fq
+
+# Request four threads, temporary space, and a named resource token.
+lsfkit run --memory-units MB --threads 4 --tmp-space 20 \
+  --tokens-name license --tokens-number 1 \
+  16 assemble assembler reads.fq
+
+# Submit an array. INDEX in each command argument becomes $LSB_JOBINDEX.
+lsfkit run --memory-units MB --start 1 --end 100 --array-limit 20 \
+  2 map mapper reads_INDEX.fq
+
+# Wait for other jobs. Names may be supplied repeatedly.
+lsfkit run --memory-units MB --done prepare --done index --ended cleanup \
+  4 analyse analysis input.dat
+```
+
+`--checkpoint` enables BLCR checkpointing. Use `--checkpoint-dir` to choose its
+directory and `--checkpoint-period` to set the interval in minutes. Checkpoint
+jobs and job arrays can also be combined where supported by your LSF setup.
+
+For an interactive shell, `run --interactive` invokes `bsub -Is` and replaces
+the `lsfkit` process, so your terminal remains directly connected to the
+interactive job until it exits. It does not create default output or error
+files:
+
+```bash
+lsfkit run --interactive --memory-units MB 0.5 shell bash
+```
+
+### Read output statistics with `ostats`
+
+`ostats` reads the LSF notification blocks in one or more output files and
+writes tab-separated output. Time columns are rounded to two decimal places.
+By default it reports exit code, CPU time, wall-clock time, peak memory,
+requested memory, and source filename.
+
+```bash
+# Report the standard columns in hours.
+lsfkit ostats align.o assemble.o
+
+# Use minutes and include every available column.
+lsfkit ostats --time-units m --all-columns *.o
+
+# Show only failed jobs.
+lsfkit ostats --fails *.o
+
+# Summarize exit codes instead of printing one row per job.
+lsfkit ostats --summary *.o
+
+# Write tabular output to a file.
+lsfkit ostats --outfile job-stats.tsv *.o
+```
+
+`--time-units` accepts `s`, `m`, or `h` and defaults to `h`. `--all-columns`
+also includes process and thread counts, timestamps, execution host, user,
+working directory, and job name. `ostats` safely handles output files whose
+last LSF notification is incomplete, including files to which a later rerun
+has appended another notification.
