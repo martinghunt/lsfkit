@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-11
+
+### Added
+- Add the one-based `number_in_file` column to `lsfkit ostats` output.
+
 ## [0.2.0] - 2026-09-11
 
 ### Added
 - Add `lsfkit ostats --include-no-data` to emit a placeholder row for output files without usable LSF job data.
-- Add the one-based `number_in_file` column to `lsfkit ostats` output.
 
 ### Changed
 - Make `lsfkit --version` print `lsfkit vX.Y.Z`.
@@ -20,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release `v0.1.0`, before changelog tracking started in this file.
 
-[Unreleased]: https://github.com/martinghunt/lsfkit/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/martinghunt/lsfkit/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/martinghunt/lsfkit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/martinghunt/lsfkit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/martinghunt/lsfkit/releases/tag/v0.1.0
