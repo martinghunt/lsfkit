@@ -20,12 +20,13 @@ footer. Job names and filenames are always emitted in full.
 attached to your terminal until the interactive command exits. It does not add
 default `-o`/`-e` files, so the remote shell remains visible in your terminal.
 
-`lsfkit update` downloads the latest GitHub release for the current platform,
-verifies its SHA-256 checksum, and replaces the running binary. Use
-`lsfkit update --check` to check without installing or `--force` when running a
-development build.
+`lsfkit update` downloads the latest GitHub release for the current supported
+Linux platform, verifies its SHA-256 checksum, and replaces the running binary.
+Use `lsfkit update --check` to check without installing or `--force` when
+running a development build.
 
-Build locally with `./build.sh`; make all platform binaries with `./build.sh
---all`; and make release archives/checksums with `./build.sh --release --version
-vX.Y.Z`. Pushing a matching version tag runs the same release process in GitHub
-Actions.
+Build locally for the host platform with `./build.sh`, or select a test target
+with `--os` and `--arch`. `./build.sh --all` builds the complete cross-platform
+test matrix. `./build.sh --release --version vX.Y.Z` packages Linux amd64 and
+arm64 releases with checksums. Pushing a matching version tag runs the same
+release process in GitHub Actions.

@@ -23,8 +23,8 @@ Usage:
 Default behaviour builds the host binary in ./build.
 
 Options:
-  --all               Build darwin, linux and windows for amd64 and arm64.
-  --release           Build, archive and checksum the full platform matrix.
+  --all               Build test binaries for all supported OS/architecture pairs.
+  --release           Build and package Linux amd64 and arm64 releases.
   --version VERSION   Version in artifacts; required with --release.
   --os GOOS           Build one operating system (defaults to host OS).
   --arch GOARCH       Build one architecture (defaults to host architecture).
@@ -114,7 +114,11 @@ build_one() {
 	fi
 }
 
-if [[ $release -eq 1 || $all -eq 1 ]]; then
+if [[ $release -eq 1 ]]; then
+	for goarch in amd64 arm64; do
+		build_one linux "$goarch"
+	done
+elif [[ $all -eq 1 ]]; then
 	for goos in darwin linux windows; do
 		for goarch in amd64 arm64; do
 			build_one "$goos" "$goarch"
