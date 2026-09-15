@@ -68,17 +68,6 @@ func TestRunAllowsFlagsInSubmittedCommand(t *testing.T) {
 	}
 }
 
-func TestRunRejectsInteractiveCheckpointingBeforeSubmission(t *testing.T) {
-	output, err := executeCommand(
-		t,
-		"run", "--norun", "--interactive", "--checkpoint", "--memory-units", "MB",
-		"1", "shell", "bash",
-	)
-	if err == nil || !strings.Contains(err.Error(), "cannot be used with checkpointing") {
-		t.Fatalf("output=%q err=%v", output, err)
-	}
-}
-
 func TestOstatsSummary(t *testing.T) {
 	filename := filepath.Join(t.TempDir(), "job.o")
 	contents := "Sender: LSF System <host>\nSuccessfully completed.\n"

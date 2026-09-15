@@ -9,24 +9,21 @@ import (
 )
 
 type runOptions struct {
-	out              string
-	err              string
-	checkpointDir    string
-	memoryUnits      string
-	tokensName       string
-	queue            string
-	checkpoint       bool
-	interactive      bool
-	norun            bool
-	checkpointPeriod int
-	arrayLimit       int
-	start            int
-	end              int
-	threads          int
-	tokensNumber     int
-	tmpSpace         float64
-	done             []string
-	ended            []string
+	out          string
+	err          string
+	memoryUnits  string
+	tokensName   string
+	queue        string
+	interactive  bool
+	norun        bool
+	arrayLimit   int
+	start        int
+	end          int
+	threads      int
+	tokensNumber int
+	tmpSpace     float64
+	done         []string
+	ended        []string
 }
 
 func newRunCommand() *cobra.Command {
@@ -42,26 +39,23 @@ func newRunCommand() *cobra.Command {
 			}
 
 			job := lsf.Job{
-				Out:              options.out,
-				Err:              options.err,
-				Name:             args[1],
-				CommandArgs:      args[2:],
-				MemoryGB:         memory,
-				TmpSpaceGB:       options.tmpSpace,
-				Threads:          options.threads,
-				ArrayStart:       options.start,
-				ArrayEnd:         options.end,
-				ArrayLimit:       options.arrayLimit,
-				Checkpoint:       options.checkpoint,
-				Interactive:      options.interactive,
-				CheckpointDir:    options.checkpointDir,
-				CheckpointPeriod: options.checkpointPeriod,
-				MemoryUnits:      options.memoryUnits,
-				TokensName:       options.tokensName,
-				TokensNumber:     options.tokensNumber,
-				Queue:            options.queue,
-				Done:             options.done,
-				Ended:            options.ended,
+				Out:          options.out,
+				Err:          options.err,
+				Name:         args[1],
+				CommandArgs:  args[2:],
+				MemoryGB:     memory,
+				TmpSpaceGB:   options.tmpSpace,
+				Threads:      options.threads,
+				ArrayStart:   options.start,
+				ArrayEnd:     options.end,
+				ArrayLimit:   options.arrayLimit,
+				Interactive:  options.interactive,
+				MemoryUnits:  options.memoryUnits,
+				TokensName:   options.tokensName,
+				TokensNumber: options.tokensNumber,
+				Queue:        options.queue,
+				Done:         options.done,
+				Ended:        options.ended,
 			}
 
 			bsubArgs, err := job.Args()
@@ -87,10 +81,7 @@ func newRunCommand() *cobra.Command {
 	flags := command.Flags()
 	flags.StringVarP(&options.err, "err", "e", "", "stderr file (default: name.e)")
 	flags.StringVarP(&options.out, "out", "o", "", "stdout file (default: name.o)")
-	flags.BoolVarP(&options.checkpoint, "checkpoint", "c", false, "use checkpointing")
 	flags.BoolVarP(&options.interactive, "interactive", "i", false, "run interactively using bsub -Is")
-	flags.StringVarP(&options.checkpointDir, "checkpoint-dir", "d", "", "checkpoint directory")
-	flags.IntVarP(&options.checkpointPeriod, "checkpoint-period", "p", 600, "checkpoint period in minutes")
 	flags.IntVar(&options.arrayLimit, "array-limit", 100, "maximum concurrently running array jobs")
 	flags.IntVar(&options.start, "start", 0, "array start index")
 	flags.IntVar(&options.end, "end", 0, "array end index")

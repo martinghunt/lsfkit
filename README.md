@@ -102,10 +102,6 @@ lsfkit run --memory-units MB --done prepare --done index --ended cleanup \
   4 analyse analysis input.dat
 ```
 
-`--checkpoint` enables BLCR checkpointing. Use `--checkpoint-dir` to choose its
-directory and `--checkpoint-period` to set the interval in minutes. Checkpoint
-jobs and job arrays can also be combined where supported by your LSF setup.
-
 For an interactive shell, `run --interactive` invokes `bsub -Is` and replaces
 the `lsfkit` process, so your terminal remains directly connected to the
 interactive job until it exits. It does not create default output or error

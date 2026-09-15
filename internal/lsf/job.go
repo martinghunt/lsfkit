@@ -20,26 +20,23 @@ var (
 
 // Job describes an LSF job submission.
 type Job struct {
-	Out              string
-	Err              string
-	Name             string
-	Queue            string
-	CommandArgs      []string
-	MemoryGB         float64
-	TmpSpaceGB       float64
-	Threads          int
-	ArrayStart       int
-	ArrayEnd         int
-	ArrayLimit       int
-	CheckpointPeriod int
-	TokensNumber     int
-	Checkpoint       bool
-	Interactive      bool
-	CheckpointDir    string
-	MemoryUnits      string
-	TokensName       string
-	Done             []string
-	Ended            []string
+	Out          string
+	Err          string
+	Name         string
+	Queue        string
+	CommandArgs  []string
+	MemoryGB     float64
+	TmpSpaceGB   float64
+	Threads      int
+	ArrayStart   int
+	ArrayEnd     int
+	ArrayLimit   int
+	TokensNumber int
+	Interactive  bool
+	MemoryUnits  string
+	TokensName   string
+	Done         []string
+	Ended        []string
 }
 
 // Args returns the exact argument vector to pass to bsub.
@@ -68,17 +65,6 @@ func (j Job) Args() ([]string, error) {
 	args := make([]string, 0, 24+len(j.CommandArgs))
 	if j.Interactive {
 		args = append(args, "-Is")
-	}
-	if j.Checkpoint {
-		dir := j.CheckpointDir
-		if dir == "" {
-			dir = j.Out + ".checkpoint"
-		}
-		absoluteDir, err := filepath.Abs(dir)
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, "-k", absoluteDir+" method=blcr "+strconv.Itoa(j.CheckpointPeriod))
 	}
 	if j.Queue != "" {
 		args = append(args, "-q", j.Queue)
@@ -109,9 +95,6 @@ func (j Job) Args() ([]string, error) {
 			commandArgs[i] = strings.ReplaceAll(commandArgs[i], "INDEX", "$LSB_JOBINDEX")
 		}
 	}
-	if j.Checkpoint {
-		commandArgs = append([]string{"cr_run"}, commandArgs...)
-	}
 	return append(args, commandArgs...), nil
 }
 
@@ -136,9 +119,6 @@ func (j Job) validate() error {
 	}
 	if j.Interactive && j.ArrayStart != 0 {
 		return fmt.Errorf("--interactive cannot be used with a job array")
-	}
-	if j.Interactive && j.Checkpoint {
-		return fmt.Errorf("--interactive cannot be used with checkpointing")
 	}
 	return nil
 }
