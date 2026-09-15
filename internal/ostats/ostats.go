@@ -140,11 +140,11 @@ func value(s Stats, col, unit string) string {
 	if unit == "h" {
 		mult = 1.0 / 3600
 	}
-	number := func(v *float64, scale float64) string {
+	number := func(v *float64) string {
 		if v == nil {
 			return "*"
 		}
-		return fmt.Sprintf("%g", *v*scale)
+		return fmt.Sprintf("%g", *v)
 	}
 	timeNumber := func(v *float64) string {
 		if v == nil {
@@ -179,9 +179,9 @@ func value(s Stats, col, unit string) string {
 	case "wall_clock_time":
 		return timeNumber(s.WallClockTime)
 	case "max_memory":
-		return number(s.MaxMemory, 1)
+		return number(s.MaxMemory)
 	case "requested_memory":
-		return number(s.RequestedMemory, 1)
+		return number(s.RequestedMemory)
 	case "max_processes":
 		return integer(s.MaxProcesses)
 	case "max_threads":
