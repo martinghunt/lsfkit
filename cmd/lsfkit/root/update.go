@@ -46,26 +46,19 @@ func githubToken() string {
 func printUpdateResult(cmd *cobra.Command, result selfupdate.Result) error {
 	out := cmd.OutOrStdout()
 	switch {
-	case result.Updated && displayVersion(result.CurrentVersion) == displayVersion(result.LatestVersion):
-		_, err := fmt.Fprintf(out, "installed lsfkit %s\n", displayVersion(result.LatestVersion))
+	case result.Updated && selfupdate.DisplayVersion(result.CurrentVersion) == selfupdate.DisplayVersion(result.LatestVersion):
+		_, err := fmt.Fprintf(out, "installed lsfkit %s\n", selfupdate.DisplayVersion(result.LatestVersion))
 		return err
 	case result.Updated:
-		_, err := fmt.Fprintf(out, "updated lsfkit from %s to %s\n", displayVersion(result.CurrentVersion), displayVersion(result.LatestVersion))
+		_, err := fmt.Fprintf(out, "updated lsfkit from %s to %s\n", selfupdate.DisplayVersion(result.CurrentVersion), selfupdate.DisplayVersion(result.LatestVersion))
 		return err
 	case result.UpToDate:
-		_, err := fmt.Fprintf(out, "lsfkit is up to date (%s)\n", displayVersion(result.CurrentVersion))
+		_, err := fmt.Fprintf(out, "lsfkit is up to date (%s)\n", selfupdate.DisplayVersion(result.CurrentVersion))
 		return err
 	case result.CheckOnly:
-		_, err := fmt.Fprintf(out, "lsfkit %s is available (current %s)\n", displayVersion(result.LatestVersion), displayVersion(result.CurrentVersion))
+		_, err := fmt.Fprintf(out, "lsfkit %s is available (current %s)\n", selfupdate.DisplayVersion(result.LatestVersion), selfupdate.DisplayVersion(result.CurrentVersion))
 		return err
 	default:
 		return nil
 	}
-}
-
-func displayVersion(raw string) string {
-	if len(raw) > 1 && (raw[0] == 'v' || raw[0] == 'V') && raw[1] >= '0' && raw[1] <= '9' {
-		return raw[1:]
-	}
-	return raw
 }

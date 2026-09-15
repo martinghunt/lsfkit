@@ -102,7 +102,7 @@ func Update(ctx context.Context, opts Options) (Result, error) {
 		return result, nil
 	}
 	if !currentOK && !opts.Force && !opts.CheckOnly {
-		return result, fmt.Errorf("current version %q is not a release version; use --force to install %s", opts.CurrentVersion, displayVersion(release.TagName))
+		return result, fmt.Errorf("current version %q is not a release version; use --force to install %s", opts.CurrentVersion, DisplayVersion(release.TagName))
 	}
 
 	asset, err := selectReleaseAsset(release.Assets, release.TagName, opts.GOOS, opts.GOARCH)
@@ -534,7 +534,9 @@ func compareInt(a, b int) int {
 	}
 }
 
-func displayVersion(raw string) string {
+// DisplayVersion strips a leading "v" or "V" from a release version string
+// such as "v1.2.3", for user-facing display.
+func DisplayVersion(raw string) string {
 	if len(raw) > 1 && (raw[0] == 'v' || raw[0] == 'V') && raw[1] >= '0' && raw[1] <= '9' {
 		return raw[1:]
 	}
