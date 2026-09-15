@@ -2,6 +2,7 @@ package lsf
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -133,6 +134,45 @@ func TestInteractiveArgsPreserveCommandWords(t *testing.T) {
 func TestShellQuote(t *testing.T) {
 	if got, want := shellQuote("job'name"), `'job'"'"'name'`; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestPreExecHomeCheckIsShellQuoted(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home dir with a ' quote")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+
+	job := Job{
+		Name:        "x",
+		CommandArgs: []string{"echo"},
+		MemoryGB:    1,
+		MemoryUnits: "MB",
+		Threads:     1,
+	}
+	args, err := job.Args()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "test -e " + shellQuote(home)
+	found := false
+	for i, a := range args {
+		if a == "-E" && i+1 < len(args) {
+			found = true
+			if args[i+1] != want {
+				t.Fatalf("-E value = %q, want %q", args[i+1], want)
+			}
+			// The value LSF will run through a shell on the execution host
+			// must actually resolve to this home directory.
+			if err := exec.Command("sh", "-c", args[i+1]).Run(); err != nil {
+				t.Fatalf("sh -c %q failed: %v", args[i+1], err)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("-E flag not present in args")
 	}
 }
 

@@ -70,7 +70,7 @@ func (j Job) Args() ([]string, error) {
 		args = append(args, "-q", j.Queue)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		args = append(args, "-E", "test -e "+home)
+		args = append(args, "-E", "test -e "+shellQuote(home))
 	}
 	if j.Threads > 1 {
 		args = append(args, "-n", strconv.Itoa(j.Threads))
