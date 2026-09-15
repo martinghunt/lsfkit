@@ -162,3 +162,22 @@ Exited with exit code 2.
 		t.Fatalf("unexpected failed-job output:\n%s", got)
 	}
 }
+
+func TestOstatsSummaryIgnoresFails(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "jobs.o")
+	contents := `Sender: LSF System <first>
+Successfully completed.
+Sender: LSF System <second>
+Exited with exit code 2.
+`
+	if err := os.WriteFile(filename, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err := executeCommand(t, "ostats", "--summary", "--fails", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output != "exit_code\tcount\n0\t1\n2\t1\n" {
+		t.Fatalf("--summary should report every exit code regardless of --fails:\n%s", output)
+	}
+}

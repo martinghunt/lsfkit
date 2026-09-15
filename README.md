@@ -134,7 +134,8 @@ lsfkit ostats --fails *.o
 # Retain a placeholder row for output files with no LSF notification.
 lsfkit ostats --include-no-data *.o
 
-# Summarize exit codes instead of printing one row per job.
+# Summarize exit codes instead of printing one row per job. --fails is
+# ignored here: the summary always covers every exit code.
 lsfkit ostats --summary *.o
 
 # Write tabular output to a file.

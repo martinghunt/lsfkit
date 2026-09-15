@@ -54,7 +54,7 @@ func newOstatsCommand() *cobra.Command {
 	flags.StringVarP(&options.outfile, "outfile", "o", "-", "output file (- for stdout)")
 	flags.StringVar(&options.timeUnit, "time-units", "h", "time units: s, m, or h")
 	flags.BoolVarP(&options.all, "all-columns", "a", false, "output all columns")
-	flags.BoolVarP(&options.fails, "fails", "f", false, "output only failed jobs")
+	flags.BoolVarP(&options.fails, "fails", "f", false, "output only failed jobs (ignored with --summary)")
 	flags.BoolVar(&options.includeNoData, "include-no-data", false, "include a placeholder row for files without LSF job data")
 	flags.BoolVarP(&options.summary, "summary", "s", false, "summarize exit codes")
 	return command
