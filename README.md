@@ -3,9 +3,10 @@
 `lsfkit` is a pure-Go command-line tool for submitting LSF jobs and collecting
 statistics from their output files. It provides `run` for job submission and
 `ostats` for reading LSF job notifications. This repository was developed with
-substantial coding assistance from [OpenAI Codex](https://openai.com/codex),
-which helped with implementation, refactoring, tests, documentation, and
-benchmarking under human direction and review.
+substantial coding assistance from [OpenAI Codex](https://openai.com/codex) and
+[Claude Code](https://claude.com/claude-code), which helped with
+implementation, refactoring, tests, documentation, and benchmarking under
+human direction and review.
 
 ## Install
 
