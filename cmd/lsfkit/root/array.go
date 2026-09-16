@@ -5,17 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
-
-const arrayLauncher = `line=$(sed -n "${LSB_JOBINDEX}p" "$1") || exit 1
-case "$line" in
-  *[![:space:]]*) printf 'lsfkit array: line %s: %s\n' "$LSB_JOBINDEX" "$line"; exec sh -c "$line" ;;
-  *) printf 'no command at line %s in %s\n' "$LSB_JOBINDEX" "$1" >&2; exit 1 ;;
-esac`
 
 func newArrayCommand() *cobra.Command {
 	options := submissionOptions{}
@@ -32,8 +28,12 @@ func newArrayCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			executable, err := os.Executable()
+			if err != nil {
+				return fmt.Errorf("get lsfkit executable path: %w", err)
+			}
 
-			job := options.job(memory, args[1], []string{"sh", "-c", arrayLauncher, "sh", commandsFile})
+			job := options.job(memory, args[1], []string{executable, "array-task", commandsFile})
 			job.ArrayStart = 1
 			job.ArrayEnd = count
 			job.ArrayOut = arrayLogName(options.out, args[1], "o")
@@ -44,6 +44,35 @@ func newArrayCommand() *cobra.Command {
 	}
 	addSubmissionFlags(command, &options, true)
 	command.Flags().SetInterspersed(false)
+	return command
+}
+
+func newArrayTaskCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:    "array-task <commands-file>",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			index, err := strconv.Atoi(os.Getenv("LSB_JOBINDEX"))
+			if err != nil || index < 1 {
+				return fmt.Errorf("array task requires a positive LSB_JOBINDEX")
+			}
+			line, err := commandLine(args[0], index)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "lsfkit array: line %d: %s\n", index, line)
+
+			child := exec.Command("sh", "-c", line)
+			child.Stdin = os.Stdin
+			child.Stdout = cmd.OutOrStdout()
+			child.Stderr = cmd.ErrOrStderr()
+			if err := child.Run(); err != nil {
+				return fmt.Errorf("array command at line %d: %w", index, err)
+			}
+			return nil
+		},
+	}
 	return command
 }
 
@@ -93,4 +122,31 @@ func validateCommandsFile(filename string) (string, int, error) {
 		return "", 0, fmt.Errorf("commands file is empty")
 	}
 	return absFilename, lineNumber, nil
+}
+
+func commandLine(filename string, wanted int) (string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return "", fmt.Errorf("open commands file: %w", err)
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	for lineNumber := 1; ; lineNumber++ {
+		line, err := reader.ReadString('\n')
+		if lineNumber == wanted {
+			line = strings.TrimSuffix(line, "\n")
+			if strings.TrimSpace(line) == "" {
+				return "", fmt.Errorf("no command at line %d in %s", wanted, filename)
+			}
+			return line, nil
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("read commands file: %w", err)
+		}
+	}
+	return "", fmt.Errorf("no command at line %d in %s", wanted, filename)
 }

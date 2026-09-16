@@ -3,7 +3,6 @@ package root
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -96,14 +95,11 @@ func TestArrayNorunUsesOneBasedBoundsAndLogPrefixes(t *testing.T) {
 		"-J 'map[1-2]%100'",
 		"-o " + outPrefix + ".%I.o -e " + errPrefix + ".%I.e",
 		commands,
-		"${LSB_JOBINDEX}p",
+		"array-task",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("preview does not contain %q:\n%s", want, output)
 		}
-	}
-	if strings.Contains(output, "$LSB_JOB$LSB_JOBINDEX") {
-		t.Fatalf("array launcher index was rewritten:\n%s", output)
 	}
 }
 
@@ -132,23 +128,23 @@ func TestArrayCountsFinalLineWithoutNewline(t *testing.T) {
 	}
 }
 
-func TestArrayLauncherExecutesQuotedCommandWithRedirection(t *testing.T) {
+func TestArrayTaskExecutesQuotedCommandWithRedirection(t *testing.T) {
 	tempDir := t.TempDir()
 	commands := filepath.Join(tempDir, "commands.txt")
-	if err := os.WriteFile(commands, []byte("printf '%s\\n' 'hello world' > result\n"), 0o600); err != nil {
+	result := filepath.Join(tempDir, "result")
+	if err := os.WriteFile(commands, []byte("printf '%s\\n' 'hello world' > "+result+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("sh", "-c", arrayLauncher, "sh", commands)
-	command.Dir = tempDir
-	command.Env = append(os.Environ(), "LSB_JOBINDEX=1")
-	output, err := command.CombinedOutput()
+	t.Setenv("LSB_JOBINDEX", "1")
+	output, err := executeCommand(t, "array-task", commands)
 	if err != nil {
-		t.Fatalf("launcher failed: %v\n%s", err, output)
+		t.Fatalf("array task failed: %v\n%s", err, output)
 	}
-	if string(output) != "lsfkit array: line 1: printf '%s\\n' 'hello world' > result\n" {
-		t.Fatalf("launcher output = %q", output)
+	wantOutput := "lsfkit array: line 1: printf '%s\\n' 'hello world' > " + result + "\n"
+	if output != wantOutput {
+		t.Fatalf("array task output = %q", output)
 	}
-	got, err := os.ReadFile(filepath.Join(tempDir, "result"))
+	got, err := os.ReadFile(result)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -122,8 +122,9 @@ lsfkit array [options] <memory-gb> <job-name> <commands-file>
 ```
 
 The first line is run by array element 1, the second by element 2, and so on.
-The commands file must be accessible on the execution hosts for the lifetime
-of the array. Empty or whitespace-only lines are rejected.
+The commands file and the `lsfkit` binary used to submit it must be accessible
+on the execution hosts for the lifetime of the array. Empty or whitespace-only
+lines are rejected.
 
 ```bash
 # commands.txt contains one command per line, such as: foo > bar
