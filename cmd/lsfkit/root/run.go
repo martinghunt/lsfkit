@@ -2,28 +2,16 @@ package root
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/martinghunt/lsfkit/internal/lsf"
 	"github.com/spf13/cobra"
 )
 
 type runOptions struct {
-	out          string
-	err          string
-	memoryUnits  string
-	tokensName   string
-	queue        string
-	interactive  bool
-	norun        bool
-	arrayLimit   int
-	start        int
-	end          int
-	threads      int
-	tokensNumber int
-	tmpSpace     float64
-	done         []string
-	ended        []string
+	submissionOptions
+	interactive bool
+	start       int
+	end         int
 }
 
 func newRunCommand() *cobra.Command {
@@ -33,67 +21,34 @@ func newRunCommand() *cobra.Command {
 		Short: "Submit an LSF job",
 		Args:  cobra.MinimumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			memory, err := strconv.ParseFloat(args[0], 64)
-			if err != nil || memory < 0 {
-				return fmt.Errorf("memory must be a non-negative number of GB")
-			}
-
-			job := lsf.Job{
-				Out:          options.out,
-				Err:          options.err,
-				Name:         args[1],
-				CommandArgs:  args[2:],
-				MemoryGB:     memory,
-				TmpSpaceGB:   options.tmpSpace,
-				Threads:      options.threads,
-				ArrayStart:   options.start,
-				ArrayEnd:     options.end,
-				ArrayLimit:   options.arrayLimit,
-				Interactive:  options.interactive,
-				MemoryUnits:  options.memoryUnits,
-				TokensName:   options.tokensName,
-				TokensNumber: options.tokensNumber,
-				Queue:        options.queue,
-				Done:         options.done,
-				Ended:        options.ended,
-			}
-
-			bsubArgs, err := job.Args()
+			memory, err := parseMemory(args[0])
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), lsf.CommandString(bsubArgs))
-			if options.norun {
-				return nil
-			}
+			job := options.job(memory, args[1], args[2:])
+			job.ArrayStart = options.start
+			job.ArrayEnd = options.end
+			job.Interactive = options.interactive
 			if options.interactive {
+				bsubArgs, err := job.Args()
+				if err != nil {
+					return err
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), lsf.CommandString(bsubArgs))
+				if options.norun {
+					return nil
+				}
 				return lsf.ExecInteractiveArgs(bsubArgs)
 			}
-			id, err := lsf.SubmitArgs(bsubArgs)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), id, "submitted")
-			return nil
+			return submitJob(cmd, job, options.norun)
 		},
 	}
 
 	flags := command.Flags()
-	flags.StringVarP(&options.err, "err", "e", "", "stderr file (default: name.e)")
-	flags.StringVarP(&options.out, "out", "o", "", "stdout file (default: name.o)")
 	flags.BoolVarP(&options.interactive, "interactive", "i", false, "run interactively using bsub -Is")
-	flags.IntVar(&options.arrayLimit, "array-limit", 100, "maximum concurrently running array jobs")
 	flags.IntVar(&options.start, "start", 0, "array start index")
 	flags.IntVar(&options.end, "end", 0, "array end index")
-	flags.StringSliceVar(&options.done, "done", nil, "depend on successfully completed job (repeatable)")
-	flags.StringSliceVar(&options.ended, "ended", nil, "depend on ended job (repeatable)")
-	flags.StringVar(&options.memoryUnits, "memory-units", "", "LSF memory units: KB or MB")
-	flags.Float64Var(&options.tmpSpace, "tmp-space", 0, "temporary space in GB")
-	flags.IntVar(&options.threads, "threads", 1, "requested threads")
-	flags.StringVar(&options.tokensName, "tokens-name", "", "resource token name")
-	flags.IntVar(&options.tokensNumber, "tokens-number", 100, "resource token value")
-	flags.StringVarP(&options.queue, "queue", "q", "", "queue")
-	flags.BoolVar(&options.norun, "norun", false, "print bsub command without submitting")
+	addSubmissionFlags(command, &options.submissionOptions, false)
 	flags.SetInterspersed(false)
 	return command
 }

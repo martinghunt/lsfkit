@@ -3,6 +3,7 @@ package root
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -65,6 +66,90 @@ func TestRunAllowsFlagsInSubmittedCommand(t *testing.T) {
 	}
 	if !strings.Contains(output, `bash -lc 'echo hello'`) {
 		t.Fatalf("command flags or arguments changed:\n%s", output)
+	}
+}
+
+func TestArrayNorunUsesOneBasedBoundsAndLogPrefixes(t *testing.T) {
+	tempDir := t.TempDir()
+	commands := filepath.Join(tempDir, "commands.txt")
+	if err := os.WriteFile(commands, []byte("foo > bar\nprintf '%s\\n' \"hello world\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outPrefix := filepath.Join(tempDir, "out", "map")
+	errPrefix := filepath.Join(tempDir, "err", "map")
+	if err := os.MkdirAll(filepath.Dir(outPrefix), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(errPrefix), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := executeCommand(
+		t,
+		"array", "--norun", "--memory-units", "MB", "-o", outPrefix, "-e", errPrefix,
+		"1", "map", commands,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"-J 'map[1-2]%100'",
+		"-o " + outPrefix + ".%I.o -e " + errPrefix + ".%I.e",
+		commands,
+		"${LSB_JOBINDEX}p",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("preview does not contain %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "$LSB_JOB$LSB_JOBINDEX") {
+		t.Fatalf("array launcher index was rewritten:\n%s", output)
+	}
+}
+
+func TestArrayRejectsEmptyCommandLine(t *testing.T) {
+	commands := filepath.Join(t.TempDir(), "commands.txt")
+	if err := os.WriteFile(commands, []byte("echo first\n \t\necho third\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := executeCommand(t, "array", "--norun", "--memory-units", "MB", "1", "job", commands)
+	if err == nil || !strings.Contains(err.Error(), "empty line at line 2") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestArrayCountsFinalLineWithoutNewline(t *testing.T) {
+	commands := filepath.Join(t.TempDir(), "commands.txt")
+	if err := os.WriteFile(commands, []byte("echo first\necho second"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err := executeCommand(t, "array", "--norun", "--memory-units", "MB", "1", "job", commands)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output, "-J 'job[1-2]%100'") {
+		t.Fatalf("wrong array bounds:\n%s", output)
+	}
+}
+
+func TestArrayLauncherExecutesQuotedCommandWithRedirection(t *testing.T) {
+	tempDir := t.TempDir()
+	commands := filepath.Join(tempDir, "commands.txt")
+	if err := os.WriteFile(commands, []byte("printf '%s\\n' 'hello world' > result\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("sh", "-c", arrayLauncher, "sh", commands)
+	command.Dir = tempDir
+	command.Env = append(os.Environ(), "LSB_JOBINDEX=1")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("launcher failed: %v\n%s", err, output)
+	}
+	got, err := os.ReadFile(filepath.Join(tempDir, "result"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "hello world\n" {
+		t.Fatalf("result = %q", got)
 	}
 }
 

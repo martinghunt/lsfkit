@@ -20,23 +20,28 @@ var (
 
 // Job describes an LSF job submission.
 type Job struct {
-	Out          string
-	Err          string
-	Name         string
-	Queue        string
-	CommandArgs  []string
-	MemoryGB     float64
-	TmpSpaceGB   float64
-	Threads      int
-	ArrayStart   int
-	ArrayEnd     int
-	ArrayLimit   int
-	TokensNumber int
-	Interactive  bool
-	MemoryUnits  string
-	TokensName   string
-	Done         []string
-	Ended        []string
+	Out         string
+	Err         string
+	Name        string
+	Queue       string
+	CommandArgs []string
+	MemoryGB    float64
+	TmpSpaceGB  float64
+	Threads     int
+	ArrayStart  int
+	ArrayEnd    int
+	ArrayLimit  int
+	ArrayOut    string
+	ArrayErr    string
+	// DisableIndexReplacement preserves command arguments containing INDEX.
+	// It is useful for array launchers which read LSB_JOBINDEX themselves.
+	DisableIndexReplacement bool
+	TokensNumber            int
+	Interactive             bool
+	MemoryUnits             string
+	TokensName              string
+	Done                    []string
+	Ended                   []string
 }
 
 // Args returns the exact argument vector to pass to bsub.
@@ -52,8 +57,19 @@ func (j Job) Args() ([]string, error) {
 	if j.Err == "" {
 		j.Err = j.Name + ".e"
 	}
+	arrayOut, arrayErr := j.Out+".%I", j.Err+".%I"
+	if j.ArrayOut != "" {
+		arrayOut = j.ArrayOut
+	}
+	if j.ArrayErr != "" {
+		arrayErr = j.ArrayErr
+	}
 	if !j.Interactive || outputSpecified {
-		if err := validateLogFiles(j.Out, j.Err); err != nil {
+		out, err := j.Out, j.Err
+		if j.ArrayStart > 0 {
+			out, err = arrayOut, arrayErr
+		}
+		if err := validateLogFiles(out, err); err != nil {
 			return nil, err
 		}
 	}
@@ -79,7 +95,7 @@ func (j Job) Args() ([]string, error) {
 
 	jobName := j.Name
 	if j.ArrayStart > 0 {
-		args = append(args, "-o", j.Out+".%I", "-e", j.Err+".%I")
+		args = append(args, "-o", arrayOut, "-e", arrayErr)
 		jobName = fmt.Sprintf("%s[%d-%d]%%%d", j.Name, j.ArrayStart, j.ArrayEnd, j.ArrayLimit)
 	} else if !j.Interactive || outputSpecified {
 		args = append(args, "-o", j.Out, "-e", j.Err)
@@ -90,7 +106,7 @@ func (j Job) Args() ([]string, error) {
 	}
 
 	commandArgs := append([]string(nil), j.CommandArgs...)
-	if j.ArrayStart > 0 {
+	if j.ArrayStart > 0 && !j.DisableIndexReplacement {
 		for i := range commandArgs {
 			commandArgs[i] = strings.ReplaceAll(commandArgs[i], "INDEX", "$LSB_JOBINDEX")
 		}
@@ -119,6 +135,9 @@ func (j Job) validate() error {
 	}
 	if j.Interactive && j.ArrayStart != 0 {
 		return fmt.Errorf("--interactive cannot be used with a job array")
+	}
+	if j.ArrayStart == 0 && (j.ArrayOut != "" || j.ArrayErr != "") {
+		return fmt.Errorf("array log paths require a job array")
 	}
 	return nil
 }

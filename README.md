@@ -53,9 +53,10 @@ archives and checksums.
 
 ## Usage
 
-`lsfkit` has three commands:
+`lsfkit` has four commands:
 
 - `lsfkit run`: submit an LSF job
+- `lsfkit array`: submit an LSF job array from a file of commands
 - `lsfkit ostats`: report statistics from LSF output files
 - `lsfkit update`: update an installed Linux release binary
 
@@ -110,6 +111,34 @@ files:
 ```bash
 lsfkit run --interactive --memory-units MB 0.5 shell bash
 ```
+
+### Submit command files with `array`
+
+Use `array` when each line of a shared file is a shell command to run in a
+separate LSF array element:
+
+```bash
+lsfkit array [options] <memory-gb> <job-name> <commands-file>
+```
+
+The first line is run by array element 1, the second by element 2, and so on.
+The commands file must be accessible on the execution hosts for the lifetime
+of the array. Empty or whitespace-only lines are rejected.
+
+```bash
+# commands.txt contains one command per line, such as: foo > bar
+lsfkit array --memory-units MB --array-limit 20 2 map commands.txt
+
+# -o and -e are prefixes for array logs, so the two directories can differ.
+lsfkit array --memory-units MB -o logs/out/map -e logs/err/map \
+  2 map commands.txt
+# Creates logs/out/map.1.o and logs/err/map.1.e for the first array element.
+```
+
+Without `-o` or `-e`, logs use the job name as their prefix, for example
+`map.1.o` and `map.1.e`. Commands are interpreted by `sh -c`, so ordinary
+shell syntax such as quotes, pipes, and redirection works. Commands must each
+fit on one physical line.
 
 ### Read output statistics with `ostats`
 

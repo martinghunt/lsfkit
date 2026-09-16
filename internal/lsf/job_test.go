@@ -34,6 +34,37 @@ func TestJobString(t *testing.T) {
 	}
 }
 
+func TestJobUsesExplicitArrayLogPaths(t *testing.T) {
+	tempDir := t.TempDir()
+	out := filepath.Join(tempDir, "out", "map.%I.o")
+	errPath := filepath.Join(tempDir, "err", "map.%I.e")
+	if err := os.MkdirAll(filepath.Dir(out), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(errPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	j := Job{
+		Name:        "map",
+		MemoryGB:    1,
+		MemoryUnits: "MB",
+		Threads:     1,
+		CommandArgs: []string{"echo", "hello"},
+		ArrayStart:  1,
+		ArrayEnd:    2,
+		ArrayLimit:  1,
+		ArrayOut:    out,
+		ArrayErr:    errPath,
+	}
+	got, err := j.String()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "-o "+out+" -e "+errPath) {
+		t.Fatalf("array paths were not used: %s", got)
+	}
+}
+
 func TestJobValidation(t *testing.T) {
 	jobs := []Job{
 		{Name: "x", CommandArgs: []string{"echo"}, Threads: 1, MemoryUnits: "bad"},

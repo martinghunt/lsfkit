@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add `lsfkit array` for submitting one shell command per line as an LSF job array.
+
 ### Removed
 - Remove BLCR checkpointing support (`run --checkpoint`, `--checkpoint-dir`, `--checkpoint-period`).
 
