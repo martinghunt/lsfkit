@@ -141,8 +141,12 @@ func TestArrayLauncherExecutesQuotedCommandWithRedirection(t *testing.T) {
 	command := exec.Command("sh", "-c", arrayLauncher, "sh", commands)
 	command.Dir = tempDir
 	command.Env = append(os.Environ(), "LSB_JOBINDEX=1")
-	if output, err := command.CombinedOutput(); err != nil {
+	output, err := command.CombinedOutput()
+	if err != nil {
 		t.Fatalf("launcher failed: %v\n%s", err, output)
+	}
+	if string(output) != "lsfkit array: line 1: printf '%s\\n' 'hello world' > result\n" {
+		t.Fatalf("launcher output = %q", output)
 	}
 	got, err := os.ReadFile(filepath.Join(tempDir, "result"))
 	if err != nil {

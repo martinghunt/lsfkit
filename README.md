@@ -138,7 +138,8 @@ lsfkit array --memory-units MB -o logs/out/map -e logs/err/map \
 Without `-o` or `-e`, logs use the job name as their prefix, for example
 `map.1.o` and `map.1.e`. Commands are interpreted by `sh -c`, so ordinary
 shell syntax such as quotes, pipes, and redirection works. Commands must each
-fit on one physical line.
+fit on one physical line. Each array element writes its selected line to its
+standard-output log before running it.
 
 ### Read output statistics with `ostats`
 

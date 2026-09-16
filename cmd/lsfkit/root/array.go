@@ -13,7 +13,7 @@ import (
 
 const arrayLauncher = `line=$(sed -n "${LSB_JOBINDEX}p" "$1") || exit 1
 case "$line" in
-  *[![:space:]]*) exec sh -c "$line" ;;
+  *[![:space:]]*) printf 'lsfkit array: line %s: %s\n' "$LSB_JOBINDEX" "$line"; exec sh -c "$line" ;;
   *) printf 'no command at line %s in %s\n' "$LSB_JOBINDEX" "$1" >&2; exit 1 ;;
 esac`
 
