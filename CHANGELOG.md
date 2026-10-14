@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add `lsfkit ostats --outfmt` with `json`, `table`, `tsv`, `ttable`, and `ttsv` formats for job statistics and exit-code summaries.
+
+### Changed
+- Make `table` the default output format for `lsfkit ostats`; use `--outfmt tsv` for tab-separated output.
+
 ## [0.4.0] - 2026-09-16
 
 ### Added

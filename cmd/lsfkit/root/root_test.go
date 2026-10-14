@@ -159,7 +159,7 @@ func TestOstatsSummary(t *testing.T) {
 	if err := os.WriteFile(filename, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	output, err := executeCommand(t, "ostats", "--summary", filename)
+	output, err := executeCommand(t, "ostats", "--summary", "--outfmt", "tsv", filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestOstatsIncludesFilesWithoutLSFData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	output, err := executeCommand(t, "ostats", "--include-no-data", filename)
+	output, err := executeCommand(t, "ostats", "--include-no-data", "--outfmt", "tsv", filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestOstatsNumbersReportsWithinFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	output, err := executeCommand(t, "ostats", filename)
+	output, err := executeCommand(t, "ostats", "--outfmt", "tsv", filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ Exited with exit code 2.
 	if err := os.WriteFile(input, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := executeCommand(t, "ostats", "--fails", "--outfile", output, input); err != nil {
+	if _, err := executeCommand(t, "ostats", "--fails", "--outfmt", "tsv", "--outfile", output, input); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(output)
@@ -247,7 +247,7 @@ Exited with exit code 2.
 	if err := os.WriteFile(filename, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	output, err := executeCommand(t, "ostats", "--summary", "--fails", filename)
+	output, err := executeCommand(t, "ostats", "--summary", "--fails", "--outfmt", "tsv", filename)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -145,7 +145,7 @@ standard-output log before running it.
 ### Read output statistics with `ostats`
 
 `ostats` reads the LSF notification blocks in one or more output files and
-writes tab-separated output. Time columns are rounded to two decimal places.
+writes an aligned table by default. Time columns are rounded to two decimal places.
 By default it reports the one-based `number_in_file`, exit code, CPU time,
 wall-clock time, peak memory, requested memory, and source filename.
 
@@ -166,9 +166,23 @@ lsfkit ostats --include-no-data *.o
 # ignored here: the summary always covers every exit code.
 lsfkit ostats --summary *.o
 
-# Write tabular output to a file.
-lsfkit ostats --outfile job-stats.tsv *.o
+# Write tab-separated output to a file.
+lsfkit ostats --outfmt tsv --outfile job-stats.tsv *.o
+
+# Show fields down the left-hand side.
+lsfkit ostats --outfmt ttable align.o
+
+# Write structured JSON.
+lsfkit ostats --outfmt json *.o
 ```
+
+`--outfmt` accepts `json`, `table` (the default), `tsv`, `ttable`, or `ttsv`,
+including with `--summary`. `table` and `tsv` have a header row; `ttable` and
+`ttsv` transpose those rows so field names appear in the first column, with
+`filename` first for job statistics. JSON is
+an array of objects with the selected columns as keys, numeric statistics as
+numbers, and missing statistics as `null`. Summary objects contain `exit_code`
+and `count`; `No_data` identifies files or notifications without usable data.
 
 `--time-units` accepts `s`, `m`, or `h` and defaults to `h`. `--all-columns`
 also includes process and thread counts, timestamps, execution host, user,
