@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-14
+
 ### Added
 - Add `lsfkit ostats --outfmt` with `json`, `table`, `tsv`, `ttable`, and `ttsv` formats for job statistics and exit-code summaries.
 
@@ -38,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release `v0.1.0`, before changelog tracking started in this file.
 
-[Unreleased]: https://github.com/martinghunt/lsfkit/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/martinghunt/lsfkit/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/martinghunt/lsfkit/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/martinghunt/lsfkit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/martinghunt/lsfkit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/martinghunt/lsfkit/compare/v0.1.0...v0.2.0
