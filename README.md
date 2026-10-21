@@ -1,7 +1,7 @@
 # lsfkit
 
 `lsfkit` is a pure-Go command-line tool for submitting LSF jobs and collecting
-statistics from their output files. It provides `run` for job submission and
+statistics from their output files. It provides `run`, `batch`, and `array` for job submission and
 `ostats` for reading LSF job notifications. This repository was developed with
 substantial coding assistance from [OpenAI Codex](https://openai.com/codex) and
 [Claude Code](https://claude.com/claude-code), which helped with
@@ -53,9 +53,10 @@ archives and checksums.
 
 ## Usage
 
-`lsfkit` has four commands:
+`lsfkit` has five commands:
 
 - `lsfkit run`: submit an LSF job
+- `lsfkit batch`: submit a small list of jobs with dependencies
 - `lsfkit array`: submit an LSF job array from a file of commands
 - `lsfkit ostats`: report statistics from LSF output files
 - `lsfkit update`: update an installed Linux release binary
@@ -111,6 +112,64 @@ files:
 ```bash
 lsfkit run --interactive --memory-units MB 0.5 shell bash
 ```
+
+### Submit dependent jobs with `batch`
+
+Use `batch` for a small list of jobs where later jobs depend on earlier ones:
+
+```bash
+lsfkit batch jobs.txt
+lsfkit batch --norun jobs.txt  # validate and preview without submitting
+cat jobs.txt | lsfkit batch   # stdin; an explicit - also works
+```
+
+Each line has this format; memory is in GB, as with `run`:
+
+```text
+<name> <depends-on> <memory-gb> [run options] <command> [command-arguments...]
+```
+
+For example, `jobs.txt` could contain:
+
+```text
+# name  depends-on          memory  options and command
+first   .                   4       --threads 4 --queue normal command1
+second  first               2       --tmp-space 10 command2
+third   first               2       --out third.log command3
+fourth  second,third        8       --threads 8 command4
+cleanup ended:fourth        1       cleanup-command
+report  second,ended:third  2       report-command
+```
+
+Use `.` for no dependencies. Comma-separated names mean all listed jobs must
+succeed (`--done`). Prefix an individual name with `ended:` to wait for it to
+finish regardless of success (`--ended`); for several, use
+`ended:second,ended:third`. Dependencies must reference earlier lines. Names
+must be unique, cannot be `.`, and cannot contain whitespace, commas, or colons.
+Blank lines and lines whose first non-whitespace character is `#` are ignored.
+Each job must fit on one physical line.
+
+After the first three fields, leading options use the same parser and defaults
+as `run`, including `--threads`, `--tmp-space`, `--out`, `--err`, `--queue`,
+`--memory-units`, token options, and array options. Command flags stay with the
+command. Explicit `--done` and `--ended` options add dependencies on external
+jobs; use the dependency column for jobs in this file. Interactive jobs and
+per-line `--norun` are rejected; use `batch --norun` to preview the entire list.
+
+Single/double quotes and backslash escapes group arguments as on a shell
+command line. No variables, substitutions, or globs are expanded on the
+submission host. For shell operations, explicitly invoke a shell, for example:
+
+```text
+prepare . 1 sh -c 'printf "%s\n" "hello world" > result.txt'
+```
+
+The entire list is validated before any job is submitted. Submissions happen
+in file order and use returned job IDs for dependencies, so other jobs with
+the same LSF names do not affect the chain. Each submitted job's name and ID
+are printed. If submission fails, `batch` stops, reports the failed line and
+number already submitted, and leaves those jobs submitted. Preview output
+shows dependencies by name because no job IDs have been allocated.
 
 ### Submit command files with `array`
 

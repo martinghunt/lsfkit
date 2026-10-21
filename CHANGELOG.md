@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add `lsfkit batch` to submit job lists with memory limits, per-job `run` options, and dependencies on earlier jobs (`done` by default or `ended:name`).
+- Support batch input from files or stdin, comments and blank lines, full validation before submission, job-ID dependencies, and `--norun` previews.
+
 ## [0.5.0] - 2026-10-14
 
 ### Added

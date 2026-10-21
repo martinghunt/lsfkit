@@ -15,7 +15,10 @@ type runOptions struct {
 }
 
 func newRunCommand() *cobra.Command {
-	options := runOptions{}
+	return newRunCommandWithOptions(&runOptions{})
+}
+
+func newRunCommandWithOptions(options *runOptions) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "run [options] <memory-gb> <name> <command>",
 		Short: "Submit an LSF job",
