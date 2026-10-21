@@ -9,6 +9,8 @@ import (
 )
 
 func newRootCommand() *cobra.Command {
+	// Keep commands in usage order when displaying help.
+	cobra.EnableCommandSorting = false
 	command := &cobra.Command{
 		Use:          "lsfkit",
 		Short:        "LSF job submission and output statistics",
@@ -16,7 +18,7 @@ func newRootCommand() *cobra.Command {
 		Version:      buildinfo.Version,
 	}
 	command.SetVersionTemplate("{{.Name}} {{.Version}}\n")
-	command.AddCommand(newRunCommand(), newBatchCommand(), newArrayCommand(), newArrayTaskCommand(), newOstatsCommand(), newUpdateCommand())
+	command.AddCommand(newRunCommand(), newOstatsCommand(), newArrayCommand(), newBatchCommand(), newUpdateCommand(), newArrayTaskCommand())
 	return command
 }
 

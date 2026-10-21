@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- List commands in main help in usage order: `run`, `ostats`, `array`, `batch`, `update`, `help`, `completion`.
+
 ## [0.6.0] - 2026-10-20
 
 ### Added
